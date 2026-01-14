@@ -1,0 +1,20 @@
+package com.example.card.ui.theme
+
+import androidx.compose.ui.graphics.Color
+
+// Primary vibrant blue from the logo
+val MarEasePrimary = Color(0xFF0091FF)
+// Darker blue for backgrounds/gradients
+val MarEaseDark = Color(0xFF0055C8)
+// Cyan/Aqua accent color
+val MarEaseAccent = Color(0xFF00D4FF)
+// Pure white for text and highlights
+val MarEaseWhite = Color(0xFFFFFFFF)
+
+// Legacy colors (optional, keeping for compatibility if needed)
+val Purple80 = Color(0xFFD0BCFF)
+val PurpleGrey80 = Color(0xFFCCC2DC)
+val Pink80 = Color(0xFFEFB8C8)
+val Purple40 = Color(0xFF6650a4)
+val PurpleGrey40 = Color(0xFF625b71)
+val Pink40 = Color(0xFF7D5260)
