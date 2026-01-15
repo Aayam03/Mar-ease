@@ -101,7 +101,8 @@ object AiPlayer {
         }
 
         val jokers = cards.filter { gameState.isJoker(it, player) }
-        if (jokers.size >= 2) {
+        // Only use Joker melds after 'show'
+        if (jokers.size >= 2 && gameState.hasShown[player] == true) {
             val combo = jokers.take(2)
             val nextCards = cards.toMutableList()
             nextCards.removeByReference(combo)
@@ -130,31 +131,67 @@ object AiPlayer {
     }
 
     fun isValidGeneralMeld(cards: List<Card>, gameState: GameState, player: Int): Boolean {
-        if (cards.size != 3) return false
-        
+        // A meld is either 3 cards, or 2 Jokers (special pair)
+        if (cards.size != 3 && cards.size != 2) return false
+
+        val hasShown = gameState.hasShown[player] == true
         val jokers = cards.filter { gameState.isJoker(it, player) }
         val nonJokers = cards.filter { !gameState.isJoker(it, player) }
 
+        // Rule 1: Only use Joker after 'show'
+        if (jokers.isNotEmpty() && !hasShown) return false
+
+        // Special case: 2 Jokers (treated as a meld only after show)
+        if (cards.size == 2) {
+            return jokers.size == 2 && hasShown
+        }
+
+        // If there are jokers in a 3-card meld
         if (jokers.isNotEmpty()) {
+            // Case A: 3 Jokers is always valid (if shown)
             if (nonJokers.isEmpty()) return true
-            
-            // Check for same suit (Run or Identical Triple path)
-            if (nonJokers.all { it.suit == nonJokers[0].suit }) {
-                val vSets = nonJokers.map { c -> if (c.rank == Rank.ACE) listOf(1, 14) else listOf(c.rank.value) }
-                if (nonJokers.size == 2) {
-                    for (v1 in vSets[0]) for (v2 in vSets[1]) if (abs(v1 - v2) in 0..2) return true
-                } else return true
-            }
-            
-            // Check for same rank (Standard Triple path)
+
+            // Case B: Joker for a Triple (Same Rank, Different Suits)
+            // This MUST come first or be handled strictly to avoid Identical Triple confusion
             if (nonJokers.all { it.rank == nonJokers[0].rank }) {
-                // Symbols must be different for standard triple
+                // RULE: Only allowed for Standard Triple (Different Suits)
+                // If we have 2 non-jokers, they must have different suits.
+                // If they have the same suit, it's an Identical Triple attempt -> RETURN FALSE
                 return nonJokers.distinctBy { it.suit }.size == nonJokers.size
             }
+
+            // Case C: Joker for a Run (Same Suit, Sequential)
+            if (nonJokers.all { it.suit == nonJokers[0].suit }) {
+                // Safety: If they are the same suit but same rank, it's an Identical Triple.
+                // Your rule says: No Jokers for Identical Triples.
+                if (nonJokers.size == 2 && nonJokers[0].rank == nonJokers[1].rank) {
+                    return false
+                }
+
+                // Sequence check for 2 cards + 1 joker
+                if (nonJokers.size == 2) {
+                    val vSets = nonJokers.map { c -> 
+                        if (c.rank == Rank.ACE) listOf(1, 14) else listOf(c.rank.value) 
+                    }
+                    for (v1 in vSets[0]) {
+                        for (v2 in vSets[1]) {
+                            // Gap must be 1 (consecutive) or 2 (one card missing)
+                            // e.g., 4 and 5 (gap 1) + Joker = 4,5,J
+                            // e.g., 4 and 6 (gap 2) + Joker = 4,J,6
+                            if (abs(v1 - v2) in 1..2) return true
+                        }
+                    }
+                    return false
+                }
+                return true // 1 non-joker + 2 jokers + same suit = valid run
+            }
+
             return false
         }
 
+        // --- No Jokers Logic ---
         val first = cards[0]
+
         // 1. Run check: same suit, sequential
         if (cards.all { it.suit == first.suit }) {
             val vSets = cards.map { c -> if (c.rank == Rank.ACE) listOf(1, 14) else listOf(c.rank.value) }
@@ -163,36 +200,53 @@ object AiPlayer {
                 if (s[0] + 1 == s[1] && s[1] + 1 == s[2]) return true
             }
         }
-        // 2. Identical Triple check: same rank and same suit
-        if (cards.all { it.rank == first.rank && it.suit == first.suit }) return true 
-        // 3. Standard Triple check: same rank, ALL 3 symbols DIFFERENT
+
+        // 2. Identical Triple check: same rank and same suit (Allowed without jokers)
+        if (cards.all { it.rank == first.rank && it.suit == first.suit }) return true
+
+        // 3. Standard Triple check: same rank, all 3 suits different
         if (cards.all { it.rank == first.rank } && cards.distinctBy { it.suit }.size == 3) return true
-        
+
         return false
     }
 
+    /**
+     * Improved Potential Value calculation logic.
+     * Priorities:
+     * 1. Combination (Run or Triple) in the same symbol (suit).
+     * 2. Gap Run (also same symbol).
+     * 3. Set Potential (Same rank, different symbols/suits) - only if no suit combinations exist.
+     */
     fun calculateCardPotential(card: Card, hand: List<Card>, gameState: GameState, player: Int): Int {
-        val others = hand.filter { !it.isSameInstance(card) && !gameState.isJoker(it, player) }
-        var score = 0
+        if (gameState.isJoker(card, player)) return 1000
 
-        // 1. Check for Consecutive Run potential (e.g., 5-6)
-        if (isPartOfConsecutiveRun(card, hand, gameState, player)) {
-            score += 100 
+        // 1. First search for possible Combination (Run and Triple) in the same symbol (suit)
+        val hasConsecutiveRun = isPartOfConsecutiveRun(card, hand, gameState, player)
+        val hasIdenticalTriple = isPartOfIdenticalMatch(card, hand, gameState, player)
+        
+        if (hasConsecutiveRun) return 100
+        if (hasIdenticalTriple) return 90
+
+        // 2. Check for Gap Run (also same symbol/suit combination)
+        val hasGapRun = isPartOfGapRun(card, hand, gameState, player)
+        if (hasGapRun) return 70
+
+        // 3. Among the cards that do not have a possible combination (gap or continuous Run)
+        // Check for the possibility of 3 cards having Same rank but different Symbols (Set potential)
+        val sameRankOthers = hand.filter {
+            !it.isSameInstance(card) &&
+            it.rank == card.rank &&
+            it.suit != card.suit && // Different symbols
+            !gameState.isJoker(it, player)
         }
         
-        // 2. Check for Gap Run potential (e.g., 5-7)
-        // We give this 70 points
-        else if (isPartOfGapRun(card, hand, gameState, player)) {
-            score += 70 
+        if (sameRankOthers.isNotEmpty()) {
+            val uniqueSuitsCount = (sameRankOthers + card).distinctBy { it.suit }.size
+            // Priority for Set potential (higher for triples, lower for pairs)
+            return if (uniqueSuitsCount >= 3) 60 else 50
         }
 
-        // 3. Check for Pair potential (e.g., 5-5)
-        // We give this 50 points (making it lower than the Gap Run)
-        if (isPartOfPair(card, hand, gameState, player)) {
-            score += 50 
-        }
-
-        return score
+        return 0
     }
 
     fun isPartOfConsecutiveRun(card: Card, hand: List<Card>, gameState: GameState, player: Int): Boolean {
@@ -219,6 +273,12 @@ object AiPlayer {
         }
     }
 
+    fun isPartOfIdenticalMatch(card: Card, hand: List<Card>, gameState: GameState, player: Int): Boolean {
+        if (gameState.isJoker(card, player)) return false
+        val others = hand.filter { !it.isSameInstance(card) && !gameState.isJoker(it, player) }
+        return others.any { it.rank == card.rank && it.suit == card.suit }
+    }
+
     fun isPartOfPair(card: Card, hand: List<Card>, gameState: GameState, player: Int): Boolean {
         if (gameState.isJoker(card, player)) return false
         val others = hand.filter { !it.isSameInstance(card) && !gameState.isJoker(it, player) }
@@ -243,11 +303,12 @@ object AiPlayer {
             // Highest priority: Keep melded cards
             if (meldedCards.any { it.isSameInstance(card) }) return@map card to 10000 
 
-            val potential = calculateCardPotential(card, hand, gameState, player)
+            var score = calculateCardPotential(card, hand, gameState, player)
             
-            // Score represents "Keep Value". 
-            // We want to discard the card with the MINIMUM score.
-            val score = potential - card.rank.value
+            // ACE and KING have fewer run possibilities (cannot form K-A-2)
+            if (card.rank == Rank.ACE || card.rank == Rank.KING) {
+                score -= 1
+            }
             
             card to score
         }
@@ -303,14 +364,15 @@ object AiPlayer {
     }
 
     private fun findAnyMeldGreedy(cards: List<Card>, gameState: GameState, player: Int): List<Card>? {
+        val hasShown = gameState.hasShown[player] == true
         if (cards.size < 3) {
             val jokers = cards.filter { gameState.isJoker(it, player) }
-            if (jokers.size >= 2) return jokers.take(2)
+            if (jokers.size >= 2 && hasShown) return jokers.take(2)
             return null
         }
         
         val jokers = cards.filter { gameState.isJoker(it, player) }
-        if (jokers.size >= 2) return jokers.take(2)
+        if (jokers.size >= 2 && hasShown) return jokers.take(2)
 
         for (i in 0 until cards.size - 2) {
             for (j in i + 1 until cards.size - 1) {

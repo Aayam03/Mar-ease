@@ -38,9 +38,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -356,57 +358,171 @@ fun PauseMenuOverlay(onResume: () -> Unit, onGoBack: () -> Unit, onLearnFromStar
 
 @Composable
 fun BasicsOverlay(hasShown: Boolean, onDismiss: () -> Unit) {
+    var currentPage by remember { mutableIntStateOf(0) }
+    
+    val pages = remember(hasShown) {
+        val list = mutableListOf<@Composable () -> Unit>()
+        
+        if (hasShown) {
+            list.add {
+                Column {
+                    Text("You\u0027ve just performed a \u0027Show\u0027!", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        "You can now view which cards other players have shown by clicking the EYE (👁️) icon next to their names.",
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                }
+            }
+        }
+
+        list.add {
+            Column {
+                Text("1. Objective", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    "Form valid combination of 3 cards(Melds) with your cards. The ultimate goal is to form 7 melds.",
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            }
+        }
+
+        list.add {
+            Column {
+                Text("2. Turn Basics", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    "Every turn begins by drawing a card (from Stock or Discard) by tapping on them and ends by discarding a card or clicking SHOW/END TURN.",
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            }
+        }
+
+        list.add {
+            Column {
+                Text("3. Melds", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    "- Runs: 3+ sequential cards of the same suit (e.g., 5♥, 6♥, 7♥).\n" +
+                    "- Triples: 3 cards of the same rank (different suits OR exact same suit).\n" +
+                    "- Jokers: Can substitute for any card to complete a Run or Triple. Multiple Jokers can even be used together with a single standard card to form a 3-card meld."+
+                    "Note : Only Runs and Triples of the Exact same card can be used for 'show'",
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            }
+        }
+
+        list.add {
+            Column {
+                Text("4. Special First Turn Show", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    "If you have 3 Jokers or 3 identical cards (same rank AND same suit) on your very first turn, you can SHOW them immediately for a bonus:\n" +
+                    "- 3 Jokers: +25 Points\n- 3 Identical Cards: +10 Points",
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            }
+        }
+
+        list.add {
+            Column {
+                Text("5. Standard Showing", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    "Once you have at least 3 valid melds(only run nad 3 identical cards), discard down to 21 cards and press SHOW. This reveals the Maal (Special Joker) and earns you points.",
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            }
+        }
+
+        list.add {
+            Column {
+                Text("6. The Maal (Special Joker)", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    "When someone shows, a card is picked as the Maal. That card, and cards related to it, become Jokers:\n" +
+                    "- Standard Joker: Always a Joker.\n" +
+                    "- The Maal Card: Exact match of revealed card.\n" +
+                    "- Same Rank: Cards with same rank as Maal.\n" +
+                    "- Neighbors: Cards with same suit as Maal but +/- 1 in rank.",
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            }
+        }
+
+        list.add {
+            Column {
+                Text("7. Maal Calculation (Points)", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    "After showing, you gain points for these cards in your hand:\n" +
+                    "- Standard Joker: 5 Points\n" +
+                    "- The Maal Card itself: 3 Points\n" +
+                    "- Same Rank as Maal (Same Color): 5 Points\n" +
+                    "- Neighbors of Maal: 2 Points",
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            }
+        }
+
+        list.add {
+            Column {
+                Text("8. Winning", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    "Form 7 melds total to win. Your final score depends on your Maal points vs others.",
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            }
+        }
+        
+        list
+    }
+
     Box(
-        modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.85f)).clickable { onDismiss() },
+        modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.85f)),
         contentAlignment = Alignment.Center
     ) {
         Card(
-            modifier = Modifier.padding(16.dp).fillMaxWidth(0.95f).fillMaxHeight(0.95f),
+            modifier = Modifier.padding(32.dp).width(500.dp).height(400.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
         ) {
-            Column(modifier = Modifier.padding(20.dp)) {
-                Text("How to Play", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                Spacer(modifier = Modifier.height(8.dp))
-                Column(modifier = Modifier.weight(1f).verticalScroll(rememberScrollState())) {
-                    if (hasShown) {
-                        Surface(
-                            color = MaterialTheme.colorScheme.primaryContainer,
-                            shape = RoundedCornerShape(8.dp),
-                            modifier = Modifier.padding(bottom = 16.dp)
+            Box(modifier = Modifier.fillMaxSize()) {
+                // End Button at the Top
+                TextButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.align(Alignment.TopEnd).padding(8.dp)
+                ) {
+                    Text("END", fontSize = 24.sp, fontWeight = FontWeight.ExtraBold, color = Color.Red)
+                }
+
+                Column(modifier = Modifier.padding(24.dp).fillMaxSize(), verticalArrangement = Arrangement.SpaceBetween) {
+                    // Page Content
+                    Box(modifier = Modifier.weight(1f).padding(top = 40.dp)) {
+                        pages[currentPage]()
+                    }
+
+                    // Navigation Buttons
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        TextButton(
+                            onClick = { if (currentPage > 0) currentPage-- },
+                            enabled = currentPage > 0
                         ) {
-                            Text(
-                                text = "NEW: You\u0027ve just performed a \u0027Show\u0027! You can now view which cards other players have shown by clicking the EYE (👁️) icon next to their names.",
-                                style = MaterialTheme.typography.bodyMedium,
-                                modifier = Modifier.padding(12.dp),
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer
-                            )
+                            Text("Previous", fontSize = 18.sp)
+                        }
+                        
+                        Text("Page ${currentPage + 1} of ${pages.size}", style = MaterialTheme.typography.labelMedium)
+
+                        TextButton(
+                            onClick = { if (currentPage < pages.size - 1) currentPage++ else onDismiss() }
+                        ) {
+                            Text(if (currentPage < pages.size - 1) "Next" else "Finish", fontSize = 18.sp)
                         }
                     }
-                    Text(
-                        text = "1. Objective:\nForm valid combinations (Melds) with your cards. The ultimate goal is to form 7 melds.\n\n" +
-                             "2. Turn Basics:\nEvery turn begins by drawing a card (from Stock or Discard) and ends by discarding a card or clicking SHOW/END TURN.\n\n" +
-                             "3. Melds:\n- Runs: 3+ sequential cards of the same suit (e.g., 5♥, 6♥, 7♥).\n- Triples: 3 cards of the same rank (different suits OR exact same suit).\n- Joker Pair: 2 Jokers can form a valid meld.\n\n" +
-                             "4. Special First Turn Show:\nIf you have 3 Jokers or 3 identical cards (same rank AND same suit) on your very first turn, you can SHOW them immediately for a bonus:\n" +
-                             "- 3 Jokers: +25 Points\n- 3 Identical Cards: +10 Points\n\n" +
-                             "5. Standard Showing:\nOnce you have at least 3 valid melds, discard down to 21 cards and press SHOW. This reveals the Maal (Special Joker) and earns you points.\n\n" +
-                             "6. The Maal (Special Joker):\nWhen someone shows, a card is picked as the Maal. That card, and cards related to it, become Jokers:\n" +
-                             "- Standard Joker: Always a Joker.\n- The Maal Card: Exact match of revealed card.\n- Same Rank: Cards with same rank as Maal and matching color.\n- Neighbors: Cards with same suit as Maal but +/- 1 in rank.\n\n" +
-                             "Jokers are highlighted with a Cyan border AFTER you SHOW.\n\n" +
-                             "7. Maal Calculation (Points):\nAfter showing, you gain points for these cards in your hand:\n" +
-                             "- Standard Joker: 5 Points\n- The Maal Card itself: 3 Points\n- Same Rank as Maal (Same Color): 5 Points\n- Neighbors of Maal: 2 Points\n\n" +
-                             "8. Winning:\nForm 7 melds total to win. Your final score depends on your Maal points vs others.",
-                        style = MaterialTheme.typography.bodySmall,
-                        lineHeight = 18.sp
-                    )
-                }
-                Spacer(modifier = Modifier.height(12.dp))
-                Button(
-                    onClick = onDismiss, 
-                    modifier = Modifier.align(Alignment.CenterHorizontally), // Moved to the center
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp)
-                ) {
-                    Text("Got it!", fontSize = 12.sp)
                 }
             }
         }
