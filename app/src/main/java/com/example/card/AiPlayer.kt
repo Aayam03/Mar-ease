@@ -2,7 +2,48 @@ package com.example.card
 
 import kotlin.math.abs
 
+data class DiscardDecision(val card: Card, val reason: String)
+
 object AiPlayer {
+
+    /**
+     * Finds all cards that are currently part of any valid meld in the hand.
+     * Takes into account whether the player has shown or not.
+     */
+    fun findAllMeldedCards(hand: List<Card>, gameState: GameState, player: Int): List<Card> {
+        return findAllMelds(hand, gameState, player).flatten()
+    }
+
+    /**
+     * Finds all non-overlapping melds currently in the hand.
+     */
+    private fun findAllMelds(hand: List<Card>, gameState: GameState, player: Int): List<List<Card>> {
+        val result = mutableListOf<List<Card>>()
+        val temp = hand.toMutableList()
+        val hasShown = gameState.hasShown[player] == true
+        
+        var safety = 0
+        while (safety < 8) { // Max melds possible in 21 cards
+            safety++
+            val m = if (hasShown) {
+                findAnyMeldGreedy(temp, gameState, player)
+            } else {
+                // If not shown, only count melds valid for initial show
+                findSingleInitialRun(temp) ?: 
+                findSingleInitialTriple(temp) ?: 
+                findThreeJokers(temp)
+            } ?: break
+            
+            result.add(m)
+            temp.removeByReference(m)
+        }
+        return result
+    }
+
+    private fun findThreeJokers(cards: List<Card>): List<Card>? {
+        val jokers = cards.filter { it.rank == Rank.JOKER }
+        return if (jokers.size >= 3) jokers.take(3) else null
+    }
 
     /**
      * Finds 3 non-overlapping melds for the initial 'show'.
@@ -31,11 +72,10 @@ object AiPlayer {
 
         // 3. 3 Jokers (Special case)
         if (result.size < 3) {
-            val jokers = available.filter { it.rank == Rank.JOKER }
-            if (jokers.size >= 3) {
-                val set = jokers.take(3)
-                result.add(set)
-                available.removeByReference(set)
+            val jokers = findThreeJokers(available)
+            if (jokers != null) {
+                result.add(jokers)
+                available.removeByReference(jokers)
             }
         }
 
@@ -290,14 +330,7 @@ object AiPlayer {
         if (nonJokers.isEmpty()) return listOf(hand.first())
 
         // 1. Identify cards already part of a meld to protect them
-        val meldedCards = mutableSetOf<Card>()
-        val temp = hand.toMutableList()
-        var safety = 0
-        while (safety < 7) {
-            safety++
-            val m = findAnyMeldGreedy(temp, gameState, player) ?: break
-            meldedCards.addAll(m); temp.removeByReference(m)
-        }
+        val meldedCards = findAllMeldedCards(hand, gameState, player)
 
         val scores = nonJokers.map { card ->
             // Highest priority: Keep melded cards
@@ -317,50 +350,81 @@ object AiPlayer {
         return scores.filter { it.second == minScore }.map { it.first }
     }
 
-    fun findCardToDiscard(hand: List<Card>, gameState: GameState, player: Int): Card {
-        return findBestDiscardOptions(hand, gameState, player).first()
+    fun findCardToDiscard(hand: List<Card>, gameState: GameState, player: Int): DiscardDecision {
+        val bestCard = findBestDiscardOptions(hand, gameState, player).first()
+        
+        if (gameState.isJoker(bestCard, player)) {
+            return DiscardDecision(bestCard, "Error: AI tried to discard a Joker.")
+        }
+        
+        val hasGapRun = isPartOfGapRun(bestCard, hand, gameState, player)
+        val hasShown = gameState.hasShown[player] == true
+        
+        val reason = when {
+            !hasShown && findAllInitialMelds(hand).isNotEmpty() -> 
+                "Discarding ${bestCard.rank.symbol} to keep your 3 required melds intact for showing."
+            hasGapRun -> 
+                "Discarding ${bestCard.rank.symbol} as it's the weakest link in a potential sequence (Gap Run)."
+            isPartOfPair(bestCard, hand, gameState, player) ->
+                "Discarding ${bestCard.rank.symbol} because it's only a pair, and other cards have better connection potential."
+            else -> "This card has the lowest connection value and doesn't help form any new melds."
+        }
+        
+        return DiscardDecision(bestCard, reason)
     }
 
     fun shouldTakeCard(hand: List<Card>, cardToConsider: Card, gameState: GameState, player: Int): Boolean {
-        if (gameState.isJoker(cardToConsider, player)) return true
+        if (gameState.isJoker(cardToConsider, player)) return true        
         
-        // Special case for first turn special show
-        if (gameState.isFirstTurn && gameState.hasShown[player] != true) {
-            val totalHand = hand + cardToConsider
-            val has3Jokers = totalHand.count { it.rank == Rank.JOKER } >= 3
-            val has3Identical = totalHand.groupBy { it.rank to it.suit }.any { it.value.size >= 3 }
-            if (has3Jokers || has3Identical) return true
+        // Find existing melds in the current hand to see which cards are "busy"
+        val existingMelds = findAllMelds(hand, gameState, player)
+        val busyInRuns = existingMelds.filter { m -> 
+            // A Run is defined here as sequential ranks in the same suit with no jokers
+            m.size >= 3 && m.all { it.suit == m[0].suit } && 
+            m.distinctBy { it.rank }.size == m.size &&
+            !m.any { gameState.isJoker(it, player) }
+        }.flatten()
+
+        // 1. Identical Match Check (Picking up a duplicate)
+        val identicalInHand = hand.find { it.rank == cardToConsider.rank && it.suit == cardToConsider.suit && !gameState.isJoker(it, player) }
+        
+        if (identicalInHand != null) {
+            // NEW LOGIC: If the identical card in our hand is already part of a Run, 
+            // do NOT take another one just to make an Identical Triple
+            val isLockedInRun = busyInRuns.any { it.isSameInstance(identicalInHand) }
+            if (isLockedInRun) {
+                return false 
+            }
+            return true
         }
 
-        if (hand.any { it.rank == cardToConsider.rank && it.suit == cardToConsider.suit && !gameState.isJoker(it, player) }) return true
-
+        // 2. Run/Sequence Potential Check
         val suitCards = hand.filter { it.suit == cardToConsider.suit && !gameState.isJoker(it, player) }
         val cVals = if (cardToConsider.rank == Rank.ACE) listOf(1, 14) else listOf(cardToConsider.rank.value)
+        
         for (cv in cVals) {
             for (other in suitCards) {
+                // If the 'other' card is already part of a completed run, ignore it
+                val isOtherLocked = busyInRuns.any { it.isSameInstance(other) }
+                if (isOtherLocked) continue 
+
                 val ovs = if (other.rank == Rank.ACE) listOf(1, 14) else listOf(other.rank.value)
                 for (ov in ovs) {
-                    if (abs(cv - ov) in 1..2) return true 
+                    if (abs(cv - ov) <= 2) return true // Forms or nears a run
                 }
             }
         }
 
+        // Strategy Check: Does taking this card increase our overall meld count or complete initial requirements?
         if (gameState.hasShown[player] != true) {
-            val before = findAllInitialMelds(hand).isNotEmpty()
-            val after = findAllInitialMelds(hand + cardToConsider).isNotEmpty()
-            return after && !before
+            val before = findAllInitialMelds(hand).size
+            val after = findAllInitialMelds(hand + cardToConsider).size
+            if (after > before) return true
+        } else {
+            if (findAllMelds(hand + cardToConsider, gameState, player).size > existingMelds.size) return true
         }
-        fun countMelds(c: List<Card>): Int {
-            val temp = c.toMutableList(); var count = 0
-            var safety = 0
-            while (safety < 7) {
-                safety++
-                val m = findAnyMeldGreedy(temp, gameState, player) ?: break
-                count++; temp.removeByReference(m)
-            }
-            return count
-        }
-        return countMelds(hand + cardToConsider) > countMelds(hand)
+
+        return false
     }
 
     private fun findAnyMeldGreedy(cards: List<Card>, gameState: GameState, player: Int): List<Card>? {

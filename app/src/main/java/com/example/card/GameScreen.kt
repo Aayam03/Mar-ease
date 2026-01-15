@@ -1,72 +1,28 @@
 package com.example.card
 
-import androidx.compose.animation.core.animateOffsetAsState
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.wrapContentWidth
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import com.example.card.ui.theme.CardTheme
+import com.example.card.components.*
 import kotlinx.coroutines.delay
 
 @Composable
@@ -117,20 +73,26 @@ fun StartupScreen(navController: NavController) {
     }
 }
 
-
 @Composable
-fun GameBoardScreen(playerCount: Int, showHints: Boolean, navController: NavController) {
-    val coroutineScope = rememberCoroutineScope()
-    val gameState = remember { GameState(coroutineScope, showHints).apply { setupGame(playerCount) } }
-    var showHelp by remember { mutableStateOf(showHints) }
-    var showPauseMenu by remember { mutableStateOf(false) }
-    var hasClosedHelpOnce by remember { mutableStateOf(!showHints) }
-    
+fun GameBoardScreen(
+    playerCount: Int, 
+    showHints: Boolean, 
+    navController: NavController,
+    viewModel: GameViewModel = viewModel()
+) {
+    // 1. FIX: Ensure initGame is only called ONCE when the screen opens.
+    LaunchedEffect(playerCount, showHints) {
+        viewModel.initGame(playerCount, showHints)
+    }
+
+    val gameState = viewModel.gameState ?: return
+
     val config = LocalConfiguration.current
     val screenHeight = config.screenHeightDp.dp
-    // Set card size to 32% of screen height
-    val cardHeight = screenHeight * 0.32f
-    val cardWidth = cardHeight * 0.48f
+    
+    // 2. ADJUST SCALE: 0.22f provides a safe buffer for landscape/different aspect ratios
+    val cardHeight = (screenHeight * 0.22f).coerceAtMost(180.dp) 
+    val cardWidth = cardHeight * 0.65f 
 
     var stockPilePos by remember { mutableStateOf(Offset.Zero) }
     var discardPilePos by remember { mutableStateOf(Offset.Zero) }
@@ -138,789 +100,270 @@ fun GameBoardScreen(playerCount: Int, showHints: Boolean, navController: NavCont
     val playerPositions = remember { mutableMapOf<Int, Offset>() }
     var selectedPlayerForShowView by remember { mutableStateOf<Int?>(null) }
 
-    // Automatically show help after the player shows to explain new Jokers
     val hasPlayerShown = gameState.hasShown[1] == true
     LaunchedEffect(hasPlayerShown) {
         if (hasPlayerShown && !gameState.isInitializing) {
             delay(1500) 
-            showHelp = true
+            viewModel.toggleHelp(true)
         }
     }
 
-    Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+    // 3. BACKGROUND AND CONTENT
+    Box(modifier = Modifier.fillMaxSize().background(Color(0xFF1B5E20))) { // Dark Green felt color
         if (gameState.isInitializing) {
-            Column(
-                modifier = Modifier.fillMaxSize(),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
-            ) {
-                CircularProgressIndicator(color = Color.White)
-                Spacer(modifier = Modifier.height(16.dp))
-                Text("Dealing Cards...", color = Color.White, style = MaterialTheme.typography.titleMedium)
-            }
+            LoadingScreen()
         } else {
-            Column(
-                modifier = Modifier.fillMaxSize().padding(8.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.SpaceBetween
-            ) {
-                // Moved TopAreaView to the left by wrapping in a Row with alignment
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) {
-                    TopAreaView(
-                        gameState = gameState,
-                        cardHeight = cardHeight,
-                        cardWidth = cardWidth,
-                        onStockPilePositioned = { stockPilePos = it },
-                        onDiscardPilePositioned = { discardPilePos = it },
-                        onPlayerIconPositioned = { player, pos -> playerPositions[player] = pos },
-                        onToggleShowView = { player -> 
-                            selectedPlayerForShowView = if (selectedPlayerForShowView == player) null else player
-                        }
-                    )
-                }
-
-                // Action Buttons Area
-                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    if (gameState.winner == null && gameState.currentPlayer == 1) {
-                        if (gameState.hasShown[1] == false && 
-                            (gameState.currentTurnPhase == TurnPhase.DRAW || gameState.currentTurnPhase == TurnPhase.PLAY_OR_DISCARD || gameState.currentTurnPhase == TurnPhase.SHOW_OR_END) &&
-                            (gameState.playerHands[1]?.size == 21 || (gameState.isFirstTurn && gameState.currentTurnPhase == TurnPhase.DRAW))
-                        ) {
-                            val canShow = if (gameState.isFirstTurn && gameState.currentTurnPhase == TurnPhase.DRAW) {
-                                if (gameState.selectedCards.size == 3) {
-                                    val jokers = gameState.selectedCards.filter { it.rank == Rank.JOKER }
-                                    val identical = gameState.selectedCards.distinctBy { it.rank }.size == 1 &&
-                                                   gameState.selectedCards.distinctBy { it.suit }.size == 1
-                                    jokers.size == 3 || identical
-                                } else false
-                            } else {
-                                gameState.selectedCards.size == 9 && AiPlayer.findAllInitialMelds(gameState.selectedCards.toList()).size >= 3
-                            }
-
-                            Button(
-                                onClick = { gameState.humanShows() },
-                                enabled = canShow
-                            ) {
-                                Text("SHOW", fontWeight = FontWeight.Bold)
-                            }
-                        }
-                        
-                        if (gameState.currentTurnPhase == TurnPhase.PLAY_OR_DISCARD && gameState.selectedCards.size == 1) {
-                            Button(
-                                onClick = { gameState.humanDiscardsCard(gameState.selectedCards.first()) }
-                            ) {
-                                Text("DISCARD", fontWeight = FontWeight.Bold)
-                            }
-                        }
-
-                        if (gameState.currentTurnPhase == TurnPhase.SHOW_OR_END) {
-                            Button(
-                                onClick = { gameState.humanEndsTurnWithoutShowing() }
-                            ) {
-                                Text("END TURN", fontWeight = FontWeight.Bold)
-                            }
-                        }
-                    }
-                }
-
-                PlayerHandView(
-                    hand = gameState.playerHands[1] ?: emptyList(),
-                    cardHeight = cardHeight,
-                    cardWidth = cardWidth,
-                    selectedCards = gameState.selectedCards,
-                    highlightedCards = gameState.hint?.cards ?: emptyList(),
-                    onCardClick = { card -> gameState.toggleCardSelection(card) },
-                    isJokerSeen = gameState.hasShown[1] ?: false,
-                    gameState = gameState,
-                    onHandPositioned = { myHandPos = it }
-                )
-            }
-
-            // Pause Button (Top Left)
-            Text(
-                text = "⏸️",
-                fontSize = 24.sp,
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(16.dp)
-                    .clickable { showPauseMenu = true }
+            // Main Game UI
+            MainGameLayout(
+                gameState = gameState,
+                cardHeight = cardHeight,
+                cardWidth = cardWidth,
+                onStockPilePositioned = { stockPilePos = it },
+                onDiscardPilePositioned = { discardPilePos = it },
+                onPlayerIconPositioned = { p, pos -> playerPositions[p] = pos },
+                onToggleShowView = { p -> selectedPlayerForShowView = p },
+                onHandPositioned = { myHandPos = it }
             )
 
-            // Help Button (Moved to Top Center to avoid being hidden by Hint box)
-            if (showHints) {
-                IconButton(
-                    onClick = { showHelp = true },
-                    modifier = Modifier.align(Alignment.TopCenter).padding(16.dp)
-                ) {
-                    Text("?", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                }
-            }
+            // Overlays on top of the layout
+            GameControls(
+                showHints = showHints,
+                onPauseClick = { viewModel.togglePauseMenu(true) },
+                onHelpClick = { viewModel.toggleHelp(true) }
+            )
 
-            // Game Message Notification
-            gameState.gameMessage?.let { msg ->
-                Box(
-                    modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.3f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Card(
-                        colors = CardDefaults.cardColors(containerColor = Color.Black.copy(alpha = 0.8f)),
-                        shape = RoundedCornerShape(16.dp)
-                    ) {
-                        Text(
-                            text = msg, 
-                            color = Color.White, 
-                            modifier = Modifier.padding(32.dp),
-                            style = MaterialTheme.typography.headlineMedium,
-                            fontWeight = FontWeight.Bold,
-                            textAlign = TextAlign.Center
-                        )
-                    }
-                }
-            }
+            OverlayManager(
+                viewModel = viewModel,
+                gameState = gameState,
+                navController = navController,
+                selectedPlayerForShowView = selectedPlayerForShowView,
+                cardHeight = cardHeight,
+                cardWidth = cardWidth,
+                onDismissShowView = { selectedPlayerForShowView = null }
+            )
 
-            // Hint View (Aligned right center, moved higher up)
-            if (gameState.winner == null && hasClosedHelpOnce && !showHelp && !showPauseMenu) { 
-                HintView(
-                    hint = gameState.hint, 
-                    modifier = Modifier
-                        .align(Alignment.CenterEnd)
-                        .padding(end = 16.dp)
-                        .offset(y = (-80).dp) 
-                )
-            }
-
-            // Basics explanation overlay
-            if (showHelp) {
-                BasicsOverlay(
-                    hasShown = hasPlayerShown,
-                    onDismiss = { 
-                        showHelp = false
-                        hasClosedHelpOnce = true 
-                    }
-                )
-            }
-
-            // Pause Menu Overlay
-            if (showPauseMenu) {
-                PauseMenuOverlay(
-                    onResume = { showPauseMenu = false },
-                    onGoBack = { navController.navigate("startup") { popUpTo("startup") { inclusive = true } } },
-                    onLearnFromStart = { 
-                        navController.navigate("game_board/4/true") {
-                            popUpTo("game_board/{playerCount}/{showHints}") { inclusive = true }
-                        }
-                        showPauseMenu = false
-                    }
-                )
-            }
-
-            if (gameState.winner != null) {
-                GameEndOverlay(gameState, navController)
-            }
-            
-            selectedPlayerForShowView?.let { player ->
-                ShownCardsView(player, gameState, cardHeight, cardWidth) { selectedPlayerForShowView = null }
-            }
-
-            AnimatedCard(gameState, stockPilePos, discardPilePos, playerPositions, myHandPos, cardHeight, cardWidth)
+            // THE CARDS THEMSELVES (Animation Layer)
+            AnimatedCard(
+                gameState = gameState,
+                stockPilePos = stockPilePos,
+                discardPilePos = discardPilePos,
+                playerPositions = playerPositions,
+                myHandPos = myHandPos,
+                cardHeight = cardHeight,
+                cardWidth = cardWidth
+            )
         }
     }
 }
 
 @Composable
-fun PauseMenuOverlay(onResume: () -> Unit, onGoBack: () -> Unit, onLearnFromStart: () -> Unit) {
-    Box(
-        modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.85f)).clickable { onResume() },
-        contentAlignment = Alignment.Center
+fun LoadingScreen() {
+    Column(
+        modifier = Modifier.fillMaxSize(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
     ) {
-        Card(
-            modifier = Modifier.padding(32.dp).width(300.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-        ) {
-            Column(modifier = Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("Paused", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-                Spacer(modifier = Modifier.height(24.dp))
-                Button(onClick = onResume, modifier = Modifier.fillMaxWidth()) {
-                    Text("Resume")
-                }
-                Spacer(modifier = Modifier.height(12.dp))
-                Button(onClick = onLearnFromStart, modifier = Modifier.fillMaxWidth()) {
-                    Text("Learn from Start")
-                }
-                Spacer(modifier = Modifier.height(12.dp))
-                OutlinedButton(onClick = onGoBack, modifier = Modifier.fillMaxWidth()) {
-                    Text("Go Back")
-                }
-            }
-        }
+        CircularProgressIndicator(color = Color.White)
+        Spacer(modifier = Modifier.height(16.dp))
+        Text("Dealing Cards...", color = Color.White, style = MaterialTheme.typography.titleMedium)
     }
 }
 
 @Composable
-fun BasicsOverlay(hasShown: Boolean, onDismiss: () -> Unit) {
-    var currentPage by remember { mutableIntStateOf(0) }
-    
-    val pages = remember(hasShown) {
-        val list = mutableListOf<@Composable () -> Unit>()
-        
-        if (hasShown) {
-            list.add {
-                Column {
-                    Text("You\u0027ve just performed a \u0027Show\u0027!", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text(
-                        "You can now view which cards other players have shown by clicking the EYE (👁️) icon next to their names.",
-                        style = MaterialTheme.typography.bodyLarge
-                    )
-                }
-            }
-        }
-
-        list.add {
-            Column {
-                Text("1. Objective", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                Spacer(modifier = Modifier.height(16.dp))
-                Text(
-                    "Form valid combination of 3 cards(Melds) with your cards. The ultimate goal is to form 7 melds.",
-                    style = MaterialTheme.typography.bodyLarge
-                )
-            }
-        }
-
-        list.add {
-            Column {
-                Text("2. Turn Basics", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                Spacer(modifier = Modifier.height(16.dp))
-                Text(
-                    "Every turn begins by drawing a card (from Stock or Discard) by tapping on them and ends by discarding a card or clicking SHOW/END TURN.",
-                    style = MaterialTheme.typography.bodyLarge
-                )
-            }
-        }
-
-        list.add {
-            Column {
-                Text("3. Melds", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                Spacer(modifier = Modifier.height(16.dp))
-                Text(
-                    "- Runs: 3+ sequential cards of the same suit (e.g., 5♥, 6♥, 7♥).\n" +
-                    "- Triples: 3 cards of the same rank (different suits OR exact same suit).\n" +
-                    "- Jokers: Can substitute for any card to complete a Run or Triple. Multiple Jokers can even be used together with a single standard card to form a 3-card meld."+
-                    "Note : Only Runs and Triples of the Exact same card can be used for 'show'",
-                    style = MaterialTheme.typography.bodyLarge
-                )
-            }
-        }
-
-        list.add {
-            Column {
-                Text("4. Special First Turn Show", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                Spacer(modifier = Modifier.height(16.dp))
-                Text(
-                    "If you have 3 Jokers or 3 identical cards (same rank AND same suit) on your very first turn, you can SHOW them immediately for a bonus:\n" +
-                    "- 3 Jokers: +25 Points\n- 3 Identical Cards: +10 Points",
-                    style = MaterialTheme.typography.bodyLarge
-                )
-            }
-        }
-
-        list.add {
-            Column {
-                Text("5. Standard Showing", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                Spacer(modifier = Modifier.height(16.dp))
-                Text(
-                    "Once you have at least 3 valid melds(only run nad 3 identical cards), discard down to 21 cards and press SHOW. This reveals the Maal (Special Joker) and earns you points.",
-                    style = MaterialTheme.typography.bodyLarge
-                )
-            }
-        }
-
-        list.add {
-            Column {
-                Text("6. The Maal (Special Joker)", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                Spacer(modifier = Modifier.height(16.dp))
-                Text(
-                    "When someone shows, a card is picked as the Maal. That card, and cards related to it, become Jokers:\n" +
-                    "- Standard Joker: Always a Joker.\n" +
-                    "- The Maal Card: Exact match of revealed card.\n" +
-                    "- Same Rank: Cards with same rank as Maal.\n" +
-                    "- Neighbors: Cards with same suit as Maal but +/- 1 in rank.",
-                    style = MaterialTheme.typography.bodyLarge
-                )
-            }
-        }
-
-        list.add {
-            Column {
-                Text("7. Maal Calculation (Points)", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                Spacer(modifier = Modifier.height(16.dp))
-                Text(
-                    "After showing, you gain points for these cards in your hand:\n" +
-                    "- Standard Joker: 5 Points\n" +
-                    "- The Maal Card itself: 3 Points\n" +
-                    "- Same Rank as Maal (Same Color): 5 Points\n" +
-                    "- Neighbors of Maal: 2 Points",
-                    style = MaterialTheme.typography.bodyLarge
-                )
-            }
-        }
-
-        list.add {
-            Column {
-                Text("8. Winning", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                Spacer(modifier = Modifier.height(16.dp))
-                Text(
-                    "Form 7 melds total to win. Your final score depends on your Maal points vs others.",
-                    style = MaterialTheme.typography.bodyLarge
-                )
-            }
-        }
-        
-        list
-    }
-
-    Box(
-        modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.85f)),
-        contentAlignment = Alignment.Center
-    ) {
-        Card(
-            modifier = Modifier.padding(32.dp).width(500.dp).height(400.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-        ) {
-            Box(modifier = Modifier.fillMaxSize()) {
-                // End Button at the Top
-                TextButton(
-                    onClick = onDismiss,
-                    modifier = Modifier.align(Alignment.TopEnd).padding(8.dp)
-                ) {
-                    Text("END", fontSize = 24.sp, fontWeight = FontWeight.ExtraBold, color = Color.Red)
-                }
-
-                Column(modifier = Modifier.padding(24.dp).fillMaxSize(), verticalArrangement = Arrangement.SpaceBetween) {
-                    // Page Content
-                    Box(modifier = Modifier.weight(1f).padding(top = 40.dp)) {
-                        pages[currentPage]()
-                    }
-
-                    // Navigation Buttons
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        TextButton(
-                            onClick = { if (currentPage > 0) currentPage-- },
-                            enabled = currentPage > 0
-                        ) {
-                            Text("Previous", fontSize = 18.sp)
-                        }
-                        
-                        Text("Page ${currentPage + 1} of ${pages.size}", style = MaterialTheme.typography.labelMedium)
-
-                        TextButton(
-                            onClick = { if (currentPage < pages.size - 1) currentPage++ else onDismiss() }
-                        ) {
-                            Text(if (currentPage < pages.size - 1) "Next" else "Finish", fontSize = 18.sp)
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun GameEndOverlay(gameState: GameState, navController: NavController) {
-    val breakdown = GameEngine.getDetailedMaalBreakdown(1, gameState.playerHands, gameState.shownCards, gameState.hasShown, gameState.maalCard)
-    val totalBonus = gameState.bonusMaalPoints[1] ?: 0
-    val totalMaal = gameState.calculateMaal(1)
-    
-    Box(
-        modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.8f)),
-        contentAlignment = Alignment.Center
-    ) {
-        Card(
-            modifier = Modifier.padding(16.dp).fillMaxWidth(0.9f).fillMaxHeight(0.85f),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-        ) {
-            Column(modifier = Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("Game Results", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-                Spacer(modifier = Modifier.height(12.dp))
-                
-                Text(text = gameState.hint?.reason ?: "", style = MaterialTheme.typography.bodyLarge, textAlign = TextAlign.Center)
-                
-                Spacer(modifier = Modifier.height(16.dp))
-                Text("Your Maal Breakdown", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
-                Spacer(modifier = Modifier.height(8.dp))
-                
-                Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                    LazyVerticalGrid(
-                        columns = GridCells.Fixed(1),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.fillMaxSize()
-                    ) {
-                        if (totalBonus > 0) {
-                            item {
-                                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(4.dp)) {
-                                    Text("First Turn Bonus", modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
-                                    Text("+$totalBonus", fontWeight = FontWeight.Bold, color = Color(0xFF4CAF50))
-                                }
-                            }
-                        }
-                        items(breakdown) { item ->
-                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(4.dp)) {
-                                Box(modifier = Modifier.size(width = 35.dp, height = 50.dp)) {
-                                    CardView(card = item.card, faceUp = true)
-                                }
-                                Spacer(modifier = Modifier.width(12.dp))
-                                Text(item.reason, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
-                                Text("+${item.points}", fontWeight = FontWeight.Bold, color = Color(0xFF4CAF50))
-                            }
-                        }
-                        item {
-                            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-                            Row(modifier = Modifier.fillMaxWidth().padding(4.dp)) {
-                                Text("Total Maal Points", fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                                Text("$totalMaal", fontWeight = FontWeight.ExtraBold, fontSize = 18.sp)
-                            }
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    Button(onClick = { gameState.setupGame(4) }) {
-                        Text("Learn More")
-                    }
-                    Button(onClick = { navController.navigate("player_selection") }) {
-                        Text("Play without Hints")
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun TopAreaView(
+fun MainGameLayout(
     gameState: GameState,
     cardHeight: androidx.compose.ui.unit.Dp,
     cardWidth: androidx.compose.ui.unit.Dp,
     onStockPilePositioned: (Offset) -> Unit,
     onDiscardPilePositioned: (Offset) -> Unit,
     onPlayerIconPositioned: (Int, Offset) -> Unit,
-    onToggleShowView: (Int) -> Unit
-) {
-    Column(horizontalAlignment = Alignment.Start, modifier = Modifier.padding(start = 12.dp)) { 
-        PlayerIndicatorsView(gameState, onPlayerIconPositioned, onToggleShowView)
-        Spacer(modifier = Modifier.height(8.dp))
-        Row(
-            modifier = Modifier.wrapContentWidth(),
-            horizontalArrangement = Arrangement.spacedBy(48.dp), 
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(modifier = Modifier.onGloballyPositioned { onStockPilePositioned(it.localToRoot(Offset.Zero)) }) {
-                PileView(
-                    name = "Stock", 
-                    pile = gameState.stockPile, 
-                    faceUp = false,
-                    cardHeight = cardHeight * 0.85f, 
-                    cardWidth = cardWidth * 0.85f,
-                    onClick = { if (gameState.currentPlayer == 1 && gameState.currentTurnPhase == TurnPhase.DRAW) gameState.humanDrawsFromStock() }
-                )
-            }
-            
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("Maal", style = MaterialTheme.typography.titleSmall, fontSize = 14.sp)
-                Box(modifier = Modifier.height(cardHeight * 0.75f).width(cardWidth * 0.75f), contentAlignment = Alignment.Center) {
-                    if (gameState.hasShown[1] == true && gameState.maalCard != null) {
-                        CardView(card = gameState.maalCard, faceUp = true, modifier = Modifier.fillMaxSize())
-                    } else {
-                        Box(modifier = Modifier.fillMaxSize().background(Color.Gray.copy(alpha = 0.5f), RoundedCornerShape(4.dp)))
-                    }
-                }
-            }
-
-            Box(modifier = Modifier.onGloballyPositioned { onDiscardPilePositioned(it.localToRoot(Offset.Zero)) }) {
-                PileView(
-                    name = "Discard", 
-                    pile = gameState.discardPile, 
-                    faceUp = true, 
-                    cardHeight = cardHeight * 0.85f,
-                    cardWidth = cardWidth * 0.85f,
-                    highlight = gameState.hint?.cards?.any { it.isSameInstance(gameState.discardPile.lastOrNull() ?: it) } ?: false,
-                    onClick = { if (gameState.currentPlayer == 1 && gameState.currentTurnPhase == TurnPhase.DRAW) gameState.humanDrawsFromDiscard() }
-                )
-            }
-        }
-    }
-}
-
-@Composable
-fun PlayerIndicatorsView(gameState: GameState, onPlayerIconPositioned: (Int, Offset) -> Unit, onToggleShowView: (Int) -> Unit) {
-    // Increased start padding to move player icons right and increased spacing between them
-    Row(modifier = Modifier.wrapContentWidth().padding(start = 60.dp), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-        for (i in 1..gameState.playerCount) {
-            val shown = gameState.hasShown[i] == true
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                PlayerIndicator(i, gameState, onPlayerIconPositioned)
-                if (shown) {
-                    IconButton(
-                        onClick = { onToggleShowView(i) },
-                        modifier = Modifier.size(32.dp)
-                    ) {
-                        Text("👁️", fontSize = 18.sp)
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun PlayerIndicator(player: Int, gameState: GameState, onPlayerIconPositioned: (Int, Offset) -> Unit) {
-    val isCurrent = player == gameState.currentPlayer
-    val icon = gameState.playerIcons[player] ?: ""
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier
-            .clip(RoundedCornerShape(4.dp))
-            .background(if (isCurrent) MaterialTheme.colorScheme.primaryContainer else Color.Transparent)
-            .padding(4.dp)
-            .onGloballyPositioned { onPlayerIconPositioned(player, it.localToRoot(Offset.Zero)) }
-    ) {
-        Text("P$player", fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal, fontSize = 14.sp)
-        Text(icon, fontSize = 24.sp)
-    }
-}
-
-@Composable
-fun ShownCardsView(player: Int, gameState: GameState, cardHeight: androidx.compose.ui.unit.Dp, cardWidth: androidx.compose.ui.unit.Dp, onDismiss: () -> Unit) {
-    val shownCards = gameState.shownCards[player] ?: emptyList()
-    Box(
-        modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.8f)).clickable { onDismiss() },
-        contentAlignment = Alignment.Center
-    ) {
-        Card(
-            modifier = Modifier.padding(16.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-        ) {
-            Column(modifier = Modifier.padding(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("Shown cards - Player $player", style = MaterialTheme.typography.titleMedium)
-                Spacer(modifier = Modifier.height(8.dp))
-                
-                val melds = shownCards.chunked(3)
-                melds.forEach { meld ->
-                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        meld.forEach { card -> CardView(card = card, faceUp = true, modifier = Modifier.height(cardHeight * 0.7f).width(cardWidth * 0.7f)) }
-                    }
-                    Spacer(modifier = Modifier.height(4.dp))
-                }
-                Button(onClick = onDismiss) { Text("Close") }
-            }
-        }
-    }
-}
-
-
-@Composable
-fun PileView(name: String, pile: List<Card>, faceUp: Boolean, cardHeight: androidx.compose.ui.unit.Dp, cardWidth: androidx.compose.ui.unit.Dp, highlight: Boolean = false, onClick: () -> Unit = {}) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.clickable(onClick = onClick)) {
-        Text("$name (${pile.size})", style = MaterialTheme.typography.labelSmall, fontSize = 14.sp)
-        Box(modifier = Modifier.height(cardHeight).width(cardWidth), contentAlignment = Alignment.Center) {
-            val card = pile.lastOrNull()
-            CardView(card = card, faceUp = faceUp && card != null, isHintHighlight = highlight, modifier = Modifier.fillMaxSize())
-        }
-    }
-}
-
-@Composable
-fun HintView(hint: Hint?, modifier: Modifier = Modifier) {
-    if (hint == null) return
-    Card(
-        modifier = modifier.width(280.dp), 
-        shape = RoundedCornerShape(8.dp),
-        elevation = CardDefaults.cardElevation(4.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.Black.copy(alpha = 0.7f))
-    ) {
-        Column(modifier = Modifier.padding(14.dp)) { 
-            Text(text = "Hint: ${hint.action}", fontWeight = FontWeight.Bold, color = Color.White, fontSize = 24.sp) 
-            Spacer(modifier = Modifier.height(6.dp))
-            Text(hint.reason, color = Color.White, fontSize = 18.sp, lineHeight = 22.sp) 
-        }
-    }
-}
-
-@Composable
-fun PlayerHandView(
-    hand: List<Card>,
-    cardHeight: androidx.compose.ui.unit.Dp,
-    cardWidth: androidx.compose.ui.unit.Dp,
-    selectedCards: List<Card>,
-    highlightedCards: List<Card>,
-    onCardClick: (Card) -> Unit,
-    isJokerSeen: Boolean,
-    gameState: GameState,
+    onToggleShowView: (Int) -> Unit,
     onHandPositioned: (Offset) -> Unit
 ) {
     Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.onGloballyPositioned { onHandPositioned(it.localToRoot(Offset.Zero)) }
+        modifier = Modifier.fillMaxSize()
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Hand (${hand.size})", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-            if (isJokerSeen) Text(" 🃏", fontSize = 16.sp)
-        }
-        Spacer(modifier = Modifier.height(4.dp))
-        LazyRow(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.Center
-        ) {
-            val overlap = cardWidth * 0.3f
-            
-            val arrangedHand = hand.sortedWith(
-                compareBy<Card> { 
-                    when (it.suit) {
-                        Suit.HEARTS -> 0
-                        Suit.SPADES -> 1
-                        Suit.DIAMONDS -> 2
-                        Suit.CLUBS -> 3
-                        else -> 4
-                    }
-                }.thenBy { it.rank.value }
+        // TOP SECTION: Opponents and Piles
+        Box(modifier = Modifier.weight(1.3f).fillMaxWidth()) {
+            TopAreaView(
+                gameState = gameState,
+                cardHeight = cardHeight,
+                cardWidth = cardWidth,
+                onStockPilePositioned = onStockPilePositioned,
+                onDiscardPilePositioned = onDiscardPilePositioned,
+                onPlayerIconPositioned = onPlayerIconPositioned,
+                onToggleShowView = onToggleShowView
             )
+        }
 
-            items(arrangedHand) { card ->
-                val isJoker = gameState.isJoker(card, 1)
-                val isHinted = highlightedCards.any { it.isSameInstance(card) }
-                val isSelected = selectedCards.any { it.isSameInstance(card) }
-                
-                Box(modifier = Modifier.width(cardWidth - overlap)) {
-                    CardView(
-                        card = card,
-                        faceUp = true,
-                        isSelected = isSelected,
-                        isHintHighlight = isHinted,
-                        onCardClick = { onCardClick(card) },
-                        modifier = Modifier.height(cardHeight).width(cardWidth),
-                        // Only highlight Joker with Cyan border AFTER the player has shown
-                        customBorder = if (isJoker && (gameState.hasShown[1] == true)) BorderStroke(2.dp, Color.Cyan) else null
-                    )
-                }
-            }
+        // MIDDLE SECTION: Actions (Fixed Height)
+        Box(
+            modifier = Modifier
+                .height(70.dp)
+                .fillMaxWidth(),
+            contentAlignment = Alignment.Center
+        ) {
+            ActionButtons(gameState)
+        }
+
+        // BOTTOM SECTION: Player Hand
+        Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+            PlayerHandView(
+                hand = gameState.playerHands[1] ?: emptyList(),
+                cardHeight = cardHeight,
+                cardWidth = cardWidth,
+                selectedCards = gameState.selectedCards,
+                highlightedCards = gameState.hint?.cards ?: emptyList(),
+                onCardClick = { card -> gameState.toggleCardSelection(card) },
+                isJokerSeen = gameState.hasShown[1] ?: false,
+                gameState = gameState,
+                onHandPositioned = onHandPositioned
+            )
         }
     }
 }
 
 @Composable
-fun CardView(
-    modifier: Modifier = Modifier,
-    card: Card?,
-    faceUp: Boolean,
-    isSelected: Boolean = false,
-    isHintHighlight: Boolean = false,
-    onCardClick: (() -> Unit)? = null,
-    customBorder: BorderStroke? = null
-) {
-    val cardColor = when (card?.suit) {
-        Suit.HEARTS, Suit.DIAMONDS -> Color.Red
-        else -> Color.Black
-    }
-    
-    val combinedModifier = if (onCardClick != null) {
-        modifier.clickable(onClick = onCardClick)
-            .then(if (isSelected) Modifier.offset(y = (-16).dp) else Modifier)
-    } else {
-        modifier
-    }
-    
-    val border = when {
-        isSelected -> BorderStroke(2.dp, Color(0xFFFF69B4)) // Pink Glow
-        isHintHighlight -> BorderStroke(2.dp, Color.Red)
-        customBorder != null -> customBorder
-        else -> BorderStroke(1.dp, Color.Black)
-    }
-    
-    Card(
-        modifier = combinedModifier,
-        shape = RoundedCornerShape(4.dp),
-        border = border,
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White)
-    ) {
-        Box(modifier = Modifier.fillMaxSize()) {
-            if (faceUp && card != null) {
-                // Check for Joker rank
-                if (card.rank == Rank.JOKER) {
-                    Box(modifier = Modifier.fillMaxSize().padding(4.dp), contentAlignment = Alignment.Center) {
-                         Text(text = "🃏", fontSize = 48.sp)
-                    }
+fun ActionButtons(gameState: GameState) {
+    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+        if (gameState.winner == null && gameState.currentPlayer == 1) {
+            if (gameState.hasShown[1] == false && 
+                (gameState.currentTurnPhase == TurnPhase.DRAW || gameState.currentTurnPhase == TurnPhase.PLAY_OR_DISCARD || gameState.currentTurnPhase == TurnPhase.SHOW_OR_END) &&
+                (gameState.playerHands[1]?.size == 21 || (gameState.isFirstTurn && gameState.currentTurnPhase == TurnPhase.DRAW))
+            ) {
+                val canShow = if (gameState.isFirstTurn && gameState.currentTurnPhase == TurnPhase.DRAW) {
+                    if (gameState.selectedCards.size == 3) {
+                        val jokers = gameState.selectedCards.filter { it.rank == Rank.JOKER }
+                        val identical = gameState.selectedCards.distinctBy { it.rank }.size == 1 &&
+                                       gameState.selectedCards.distinctBy { it.suit }.size == 1
+                        jokers.size == 3 || identical
+                    } else false
                 } else {
-                    Column(
-                        modifier = Modifier.fillMaxSize().padding(4.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(text = card.rank.symbol, color = cardColor, fontSize = 14.sp, fontWeight = FontWeight.Bold, modifier = Modifier.align(Alignment.Start))
-                        Text(text = card.suit.symbol.toString(), color = cardColor, fontSize = 32.sp)
-                        Text(text = card.rank.symbol, color = cardColor, fontSize = 14.sp, fontWeight = FontWeight.Bold, modifier = Modifier.align(Alignment.End))
-                    }
+                    gameState.selectedCards.size == 9 && AiPlayer.findAllInitialMelds(gameState.selectedCards.toList()).size >= 3
                 }
-            } else {
-                Box(modifier = Modifier.fillMaxSize().background(Color(0xFF0D47A1), shape = RoundedCornerShape(4.dp)))
+
+                Button(onClick = { gameState.humanShows() }, enabled = canShow) {
+                    Text("SHOW", fontWeight = FontWeight.Bold)
+                }
+            }
+            
+            if (gameState.currentTurnPhase == TurnPhase.PLAY_OR_DISCARD && gameState.selectedCards.size == 1) {
+                Button(onClick = { gameState.humanDiscardsCard(gameState.selectedCards.first()) }) {
+                    Text("DISCARD", fontWeight = FontWeight.Bold)
+                }
+            }
+
+            if (gameState.currentTurnPhase == TurnPhase.SHOW_OR_END) {
+                Button(onClick = { gameState.humanEndsTurnWithoutShowing() }) {
+                    Text("END TURN", fontWeight = FontWeight.Bold)
+                }
             }
         }
     }
 }
 
 @Composable
-fun AnimatedCard(
-    gameState: GameState,
-    stockPilePos: Offset,
-    discardPilePos: Offset,
-    playerPositions: Map<Int, Offset>,
-    myHandPos: Offset,
-    cardHeight: androidx.compose.ui.unit.Dp,
-    cardWidth: androidx.compose.ui.unit.Dp
+fun GameControls(
+    showHints: Boolean,
+    onPauseClick: () -> Unit,
+    onHelpClick: () -> Unit
 ) {
-    val animState = gameState.animationState ?: return
+    Box(modifier = Modifier.fillMaxSize()) {
+        Text(
+            text = "⏸️",
+            fontSize = 24.sp,
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(16.dp)
+                .clickable { onPauseClick() }
+        )
 
-    val startPos = when (animState.source) {
-        AnimationSource.STOCK -> stockPilePos
-        AnimationSource.DISCARD -> discardPilePos
-        AnimationSource.PLAYER -> if (animState.player == 1) myHandPos else playerPositions[animState.player] ?: Offset.Zero
+        if (showHints) {
+            IconButton(
+                onClick = onHelpClick,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(16.dp)
+            ) {
+                Text("?", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Color.White)
+            }
+        }
+    }
+}
+
+@Composable
+fun OverlayManager(
+    viewModel: GameViewModel,
+    gameState: GameState,
+    navController: NavController,
+    selectedPlayerForShowView: Int?,
+    cardHeight: androidx.compose.ui.unit.Dp,
+    cardWidth: androidx.compose.ui.unit.Dp,
+    onDismissShowView: () -> Unit
+) {
+    // Game Message Notification
+    gameState.gameMessage?.let { msg ->
+        Box(
+            modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.3f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Color.Black.copy(alpha = 0.8f)),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Text(
+                    text = msg, 
+                    color = Color.White, 
+                    modifier = Modifier.padding(32.dp),
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
     }
 
-    val endPos = when (animState.type) {
-        AnimationType.DRAW -> if (animState.player == 1) myHandPos else playerPositions[animState.player] ?: Offset.Zero
-        AnimationType.DISCARD -> discardPilePos
+    // Hint View
+    if (gameState.winner == null && viewModel.hasClosedHelpOnce && !viewModel.showHelp && !viewModel.showPauseMenu) { 
+        Box(modifier = Modifier.fillMaxSize()) {
+            HintView(
+                hint = gameState.hint, 
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .padding(end = 16.dp)
+            )
+        }
     }
 
-    var animationStarted by remember { mutableStateOf(false) }
-    LaunchedEffect(animState) {
-        animationStarted = false
-        animationStarted = true
-    }
-
-    val offset by animateOffsetAsState(
-        targetValue = if (animationStarted) endPos else startPos,
-        label = "cardAnimation",
-        finishedListener = { gameState.animationState = null }
-    )
-
-    if (startPos != Offset.Zero) {
-        CardView(
-            card = animState.card,
-            faceUp = animState.isFaceUp,
-            modifier = Modifier.offset { IntOffset(offset.x.toInt(), offset.y.toInt()) }.height(cardHeight).width(cardWidth)
+    // Basics Overlay
+    if (viewModel.showHelp) {
+        BasicsOverlay(
+            hasShown = gameState.hasShown[1] == true,
+            onDismiss = { viewModel.toggleHelp(false) }
         )
     }
-}
 
-@Preview(showBackground = true, widthDp = 1280, heightDp = 800)
-@Composable
-fun GameBoardPreview() {
-    CardTheme {
-        GameBoardScreen(playerCount = 4, showHints = true, navController = rememberNavController())
+    // Pause Menu Overlay
+    if (viewModel.showPauseMenu) {
+        PauseMenuOverlay(
+            onResume = { viewModel.togglePauseMenu(false) },
+            onGoBack = { navController.navigate("startup") { popUpTo("startup") { inclusive = true } } },
+            onLearnFromStart = { 
+                navController.navigate("game_board/4/true") {
+                    popUpTo("game_board/{playerCount}/{showHints}") { inclusive = true }
+                }
+                viewModel.togglePauseMenu(false)
+            }
+        )
+    }
+
+    // Game End Overlay
+    if (gameState.winner != null) {
+        GameEndOverlay(gameState, navController)
+    }
+    
+    // Shown Cards View
+    selectedPlayerForShowView?.let { player ->
+        ShownCardsView(player, gameState, cardHeight, cardWidth, onDismissShowView)
     }
 }

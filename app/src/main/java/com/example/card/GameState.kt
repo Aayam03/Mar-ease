@@ -33,8 +33,8 @@ data class AnimationState(
 )
 
 data class Hint(
-    val action: String,
-    val reason: String,
+    val title: String,
+    val message: String,
     val cards: List<Card> = emptyList()
 )
 
@@ -50,6 +50,7 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
     var currentTurnPhase by mutableStateOf(TurnPhase.DRAW)
     var animationState by mutableStateOf<AnimationState?>(null)
     var hint by mutableStateOf<Hint?>(null)
+    val meldedCards = mutableStateListOf<Card>()
     var winner by mutableStateOf<Int?>(null)
     var isInitializing by mutableStateOf(true)
     var gameMessage by mutableStateOf<String?>(null)
@@ -157,8 +158,8 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
         val status = if (diff > 0) "Lose" else "Gain"
 
         hint = Hint(
-            "Game Over!", 
-            "Winner: Player $winner. $breakdown\n" +
+            title = "Game Over!", 
+            message = "Winner: Player $winner. $breakdown\n" +
             "Scoring Values: Joker (5), Maal Card (3), Same Rank Color (5), Neighbors (2).\n" +
             "Final Calc: $totalSum - ($myIndTotal * $playerCount) = $diff. You $status ${abs(diff)} points."
         )
@@ -436,7 +437,8 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
                 if (winner != null) return@launch
 
                 // Play Phase
-                val cardToDiscard = AiPlayer.findCardToDiscard(aiHand, this@GameState, currentPlayer)
+                val decision = AiPlayer.findCardToDiscard(aiHand, this@GameState, currentPlayer)
+                val cardToDiscard = decision.card
                 moveCard(cardToDiscard, currentPlayer, AnimationType.DISCARD, AnimationSource.PLAYER) {
                     val idx = aiHand.indexOfFirst { it === cardToDiscard }
                     if (idx != -1) aiHand.removeAt(idx)
@@ -452,72 +454,63 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
     private fun updateHint() {
         if (!showHints || isInitializing || currentPlayer != 1 || winner != null) {
             hint = null
+            meldedCards.clear()
             return
         }
         val humanHand = playerHands[1] ?: return
         
+        // Always update melded cards in Learn Mode
+        meldedCards.clear()
+        meldedCards.addAll(AiPlayer.findAllMeldedCards(humanHand, this, 1))
+
         when (currentTurnPhase) {
             TurnPhase.DRAW -> {
                 if (isFirstTurn) {
                     val jokers = humanHand.filter { it.rank == Rank.JOKER }
                     val identical = humanHand.groupBy { it }.filter { it.value.size >= 3 }
                     if (jokers.size >= 3) {
-                        hint = Hint("Special Reveal!", "You have 3 Jokers! Select them and press SHOW to reveal Maal and secure a bonus if you show later.", jokers.take(3))
+                        hint = Hint(title = "Special Reveal!", message = "You have 3 Jokers! Select them and press SHOW to reveal Maal and secure a bonus if you show later.", cards = jokers.take(3))
                         return
                     } else if (identical.isNotEmpty()) {
-                        hint = Hint("Special Reveal!", "You have 3 identical cards! Select them and press SHOW to reveal Maal and secure a bonus.", identical.values.first().take(3))
+                        hint = Hint(title = "Special Reveal!", message = "You have 3 identical cards! Select them and press SHOW to reveal Maal and secure a bonus.", cards = identical.values.first().take(3))
                         return
                     }
                 }
 
                 val cardFromDiscard = discardPile.lastOrNull()
                 hint = if (cardFromDiscard != null && AiPlayer.shouldTakeCard(humanHand, cardFromDiscard, this, 1)) {
-                    Hint("Draw Discard", "You should take the ${cardFromDiscard.rank.symbol}${cardFromDiscard.suit.symbol} from the discard pile. It forms a meld or a strong connection.", listOf(cardFromDiscard))
+                    Hint(title = "Draw Discard", message = "You should take the ${cardFromDiscard.rank.symbol}${cardFromDiscard.suit.symbol} from the discard pile. It forms a meld or a strong connection.", cards = listOf(cardFromDiscard))
                 } else {
-                    Hint("Draw from Stock", "The discard pile is useless. You should draw from the stock pile.")
+                    Hint(title = "Tap to Draw from Stock", message = "The discard pile is useless. You should draw from the stock pile.")
                 }
             }
             TurnPhase.PLAY_OR_DISCARD -> {
                 if (hasShown[1] == false) {
                     val melds = AiPlayer.findAllInitialMelds(humanHand)
                     if (melds.size >= 3 && humanHand.size == 21) {
-                        hint = Hint("Choose Melds to Show", "You should select the 9 cards forming your 3 melds, then press SHOW. Jokers cannot be used in runs for the initial show.", melds.flatten())
+                        hint = Hint(title = "Choose Melds to Show", message = "You should select the 9 cards forming your 3 melds, then press SHOW. Jokers cannot be used in runs for the initial show.", cards = melds.flatten())
                     } else if (melds.size >= 3 && humanHand.size == 22) {
                         val options = AiPlayer.findBestDiscardOptions(humanHand, this, 1)
-                        hint = Hint("Discard to Show", "You have the required 3 melds! However, you must first discard one card to have exactly 21 before you can perform a 'Show'.", options)
+                        hint = Hint(title = "Discard to Show", message = "You have the required 3 melds! However, you must first discard one card to have exactly 21 before you can perform a 'Show'.", cards = options)
                     } else {
-                        val cardToDiscard = AiPlayer.findCardToDiscard(humanHand, this, 1)
-                        val hasGapRuns = humanHand.any { AiPlayer.isPartOfGapRun(it, humanHand, this, 1) }
-                        val reason = when {
-                            isJoker(cardToDiscard, 1) -> "Internal Error: Never discard Jokers!"
-                            hasGapRuns && AiPlayer.isPartOfPair(cardToDiscard, humanHand, this, 1) -> 
-                                "Discarding the ${cardToDiscard.rank} because a Gap Run has a higher probability of completion than a Pair."
-                            else -> "This card has the least connection to your other cards."
-                        }
-                        hint = Hint("Discard", reason, listOf(cardToDiscard))
+                        val decision = AiPlayer.findCardToDiscard(humanHand, this, 1)
+                        hint = Hint(title = "Suggested Discard", message = decision.reason, cards = listOf(decision.card))
                     }
                 } else {
                     if (AiPlayer.canFinish(humanHand, this, 1)) {
-                        hint = Hint("Finish!", "You have 7 valid melds. You should discard any 13th card to win!")
+                        hint = Hint(title = "Finish!", message = "You have 7 valid melds. You should discard any 13th card to win!")
                     } else {
-                        val cardToDiscard = AiPlayer.findCardToDiscard(humanHand, this, 1)
-                        val hasGapRuns = humanHand.any { AiPlayer.isPartOfGapRun(it, humanHand, this, 1) }
-                        val reason = when {
-                            isJoker(cardToDiscard, 1) -> "Internal Error: Never discard Jokers!"
-                            hasGapRuns && AiPlayer.isPartOfPair(cardToDiscard, humanHand, this, 1) -> 
-                                "Discarding the ${cardToDiscard.rank} because a Gap Run has a higher probability of completion than a Pair."
-                            else -> "This card has the least connection to your other cards."
-                        }
-                        hint = Hint("Discard", reason, listOf(cardToDiscard))
+                        val decision = AiPlayer.findCardToDiscard(humanHand, this, 1)
+                        hint = Hint(title = "Suggested Discard", message = decision.reason, cards = listOf(decision.card))
                     }
                 }
             }
             TurnPhase.SHOW_OR_END -> {
                 val melds = AiPlayer.findAllInitialMelds(humanHand)
                 hint = if (melds.isNotEmpty()) {
-                    Hint("Show Now?", "You should select your 9 melded cards and press SHOW, or End Turn if you want to wait.", melds.flatten())
+                    Hint(title = "Show Now?", message = "You should select your 9 melded cards and press SHOW, or End Turn if you want to wait.", cards = melds.flatten())
                 } else {
-                    Hint("Strategy", "You should end your turn if no further melds can be formed.")
+                    Hint(title = "Strategy", message = "You should end your turn if no further melds can be formed.")
                 }
             }
             TurnPhase.ENDED -> hint = null

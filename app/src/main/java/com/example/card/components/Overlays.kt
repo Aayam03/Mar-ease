@@ -1,0 +1,374 @@
+package com.example.card.components
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.navigation.NavController
+import com.example.card.GameEngine
+import com.example.card.GameState
+
+@Composable
+fun PauseMenuOverlay(onResume: () -> Unit, onGoBack: () -> Unit, onLearnFromStart: () -> Unit) {
+    Box(
+        modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.85f)).clickable { onResume() },
+        contentAlignment = Alignment.Center
+    ) {
+        Card(
+            modifier = Modifier.padding(32.dp).width(300.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        ) {
+            Column(modifier = Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("Paused", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.height(24.dp))
+                Button(onClick = onResume, modifier = Modifier.fillMaxWidth()) {
+                    Text("Resume")
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+                Button(onClick = onLearnFromStart, modifier = Modifier.fillMaxWidth()) {
+                    Text("Learn from Start")
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+                OutlinedButton(onClick = onGoBack, modifier = Modifier.fillMaxWidth()) {
+                    Text("Go Back")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun BasicsOverlay(hasShown: Boolean, onDismiss: () -> Unit) {
+    var currentPage by remember { mutableIntStateOf(0) }
+    val scrollState = rememberScrollState()
+
+    LaunchedEffect(currentPage) {
+        scrollState.scrollTo(0)
+    }
+
+    val pages = remember(hasShown) {
+        val list = mutableListOf<@Composable () -> Unit>()
+        
+        if (hasShown) {
+            list.add {
+                Column {
+                    Text("You\u0027ve just performed a \u0027Show\u0027!", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        "You can now view which cards other players have shown by clicking the EYE (👁️) icon next to their names.",
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                }
+            }
+        }
+
+        list.add {
+            Column {
+                Text("1. Objective", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    "Form valid combination of 3 cards(Melds) with your cards. The ultimate goal is to form 7 melds.",
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            }
+        }
+
+        list.add {
+            Column {
+                Text("2. Turn Basics", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    "Every turn begins by drawing a card (from Stock or Discard) by tapping on them and ends by discarding a card or clicking SHOW/END TURN.",
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            }
+        }
+
+        list.add {
+            Column {
+                Text("3. Melds", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                     text = buildString{
+                         append("- Runs: 3+ sequential cards of the same suit (e.g., 5♥, 6♥, 7♥).\n")
+                         append("- Triples: 3 cards of the same rank (different suits OR exact same suit).\n")
+                         append("- Jokers: Can substitute for any card to complete a Run or Triple. Multiple Jokers can even be used together with a single standard card to form a 3-card meld.\n")
+                         append("Note : Only Runs and Triples of the Exact same card can be used for 'show'\n")
+                     },
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            }
+        }
+
+        list.add {
+            Column {
+                Text("4. Special First Turn Show", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    "If you have 3 Jokers or 3 identical cards (same rank AND same suit) on your very first turn, you can SHOW them immediately for a bonus:\n" +
+                    "- 3 Jokers: +25 Points\n- 3 Identical Cards: +10 Points",
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            }
+        }
+
+        list.add {
+            Column {
+                Text("5. Standard Showing", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    "Once you have at least 3 valid melds(only run nad 3 identical cards), discard down to 21 cards and press SHOW. This reveals the Maal (Special Joker) and earns you points.",
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            }
+        }
+
+        list.add {
+            Column {
+                Text("6. The Maal (Special Joker)", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    "When someone shows, a card is picked as the Maal. That card, and cards related to it, become Jokers:\n" +
+                    "- Standard Joker: Always a Joker.\n" +
+                    "- The Maal Card: Exact match of revealed card.\n" +
+                    "- Same Rank: Cards with same rank as Maal.\n" +
+                    "- Neighbors: Cards with same suit as Maal but +/- 1 in rank.",
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            }
+        }
+
+        list.add {
+            Column {
+                Text("7. Maal Calculation (Points)", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    "After showing, you gain points for these cards in your hand:\n" +
+                    "- Standard Joker: 5 Points\n" +
+                    "- The Maal Card itself: 3 Points\n" +
+                    "- Same Rank as Maal (Same Color): 5 Points\n" +
+                    "- Neighbors of Maal: 2 Points",
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            }
+        }
+
+        list.add {
+            Column {
+                Text("8. Winning", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    "Form 7 melds total to win. Your final score depends on your Maal points vs others.",
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            }
+        }
+        
+        list
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.7f))
+            .clickable { onDismiss() },
+        contentAlignment = Alignment.Center
+    ) {
+        Card(
+            modifier = Modifier
+                .padding(32.dp)
+                .width(500.dp)
+                .heightIn(max = 450.dp)
+                .clickable(enabled = false) { },
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        ) 
+        {
+            Box(modifier = Modifier.fillMaxSize()) {
+                TextButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.align(Alignment.TopEnd).padding(8.dp)
+                ) {
+                    Text("END", fontSize = 24.sp, fontWeight = FontWeight.ExtraBold, color = Color.Red)
+                }
+
+                Column(modifier = Modifier.padding(24.dp).fillMaxSize(), verticalArrangement = Arrangement.SpaceBetween) {
+                    Box(modifier = Modifier.weight(1f).padding(top = 40.dp).verticalScroll(scrollState)) {
+                        pages[currentPage]()
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        TextButton(
+                            onClick = { if (currentPage > 0) currentPage-- },
+                            enabled = currentPage > 0
+                        ) {
+                            Text("Previous", fontSize = 18.sp)
+                        }
+                        
+                        Text("Page ${currentPage + 1} of ${pages.size}", style = MaterialTheme.typography.labelMedium)
+
+                        TextButton(
+                            onClick = { if (currentPage < pages.size - 1) currentPage++ else onDismiss() }
+                        ) {
+                            Text(if (currentPage < pages.size - 1) "Next" else "Finish", fontSize = 18.sp)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun GameEndOverlay(gameState: GameState, navController: NavController) {
+    val breakdown = GameEngine.getDetailedMaalBreakdown(1, gameState.playerHands, gameState.shownCards, gameState.hasShown, gameState.maalCard)
+    val totalBonus = gameState.bonusMaalPoints[1] ?: 0
+    val totalMaal = gameState.calculateMaal(1)
+    
+    Box(
+        modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.8f)),
+        contentAlignment = Alignment.Center
+    ) {
+        Card(
+            modifier = Modifier.padding(16.dp).fillMaxWidth(0.9f).fillMaxHeight(0.85f),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        ) {
+            Column(modifier = Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("Game Results", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.height(12.dp))
+                
+                // Fixed unresolved reference 'reason' to 'message' from Hint object
+                Text(text = gameState.hint?.message ?: "", style = MaterialTheme.typography.bodyLarge, textAlign = TextAlign.Center)
+                
+                Spacer(modifier = Modifier.height(16.dp))
+                Text("Your Maal Breakdown", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                Spacer(modifier = Modifier.height(8.dp))
+                
+                Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(1),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        if (totalBonus > 0) {
+                            item {
+                                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(4.dp)) {
+                                    Text("First Turn Bonus", modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                                    Text("+$totalBonus", fontWeight = FontWeight.Bold, color = Color(0xFF4CAF50))
+                                }
+                            }
+                        }
+                        items(breakdown) { item ->
+                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(4.dp)) {
+                                Box(modifier = Modifier.size(width = 35.dp, height = 50.dp)) {
+                                    CardView(card = item.card, faceUp = true)
+                                }
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Text(item.reason, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
+                                Text("+${item.points}", fontWeight = FontWeight.Bold, color = Color(0xFF4CAF50))
+                            }
+                        }
+                        item {
+                            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                            Row(modifier = Modifier.fillMaxWidth().padding(4.dp)) {
+                                Text("Total Maal Points", fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                                Text("$totalMaal", fontWeight = FontWeight.ExtraBold, fontSize = 18.sp)
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Button(onClick = { gameState.setupGame(4) }) {
+                        Text("Learn More")
+                    }
+                    Button(onClick = { navController.navigate("player_selection") }) {
+                        Text("Play without Hints")
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun ShownCardsView(
+    player: Int, 
+    gameState: GameState, 
+    cardHeight: androidx.compose.ui.unit.Dp, 
+    cardWidth: androidx.compose.ui.unit.Dp, 
+    onDismiss: () -> Unit
+) {
+    val shownCards = gameState.shownCards[player] ?: emptyList()
+    val scrollState = rememberScrollState()
+    Box(
+        modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.8f)).clickable { onDismiss() },
+        contentAlignment = Alignment.Center
+    ) {
+        Card(
+            modifier = Modifier.padding(16.dp).fillMaxHeight(0.8f),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp).verticalScroll(scrollState), 
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text("Shown cards - Player $player", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.height(12.dp))
+                
+                val melds = shownCards.chunked(3)
+                melds.forEach { meld ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        meld.forEach { card -> CardView(card = card, faceUp = true, modifier = Modifier.height(cardHeight * 0.7f).width(cardWidth * 0.7f)) }
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                Button(onClick = onDismiss) { Text("Close") }
+            }
+        }
+    }
+}
