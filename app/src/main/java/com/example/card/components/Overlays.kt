@@ -1,10 +1,12 @@
 package com.example.card.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -87,13 +89,14 @@ fun BasicsOverlay(hasShown: Boolean, onDismiss: () -> Unit) {
     val pages = remember(hasShown) {
         val list = mutableListOf<@Composable () -> Unit>()
         
+        // Introduction Page (Contextual) - Only show if hasShown is true
         if (hasShown) {
             list.add {
                 Column {
-                    Text("You\u0027ve just performed a \u0027Show\u0027!", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                    Text("You've just performed a 'Show'!", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(
-                        "You can now view which cards other players have shown by clicking the EYE (👁️) icon next to their names.",
+                        "Great job! You have revealed the Maal and earned your initial points. Now you can use Jokers more freely and aim to complete all 7 melds.",
                         style = MaterialTheme.typography.bodyLarge
                     )
                 }
@@ -155,7 +158,7 @@ fun BasicsOverlay(hasShown: Boolean, onDismiss: () -> Unit) {
                 Text("5. Standard Showing", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(16.dp))
                 Text(
-                    "Once you have at least 3 valid melds(only run nad 3 identical cards), discard down to 21 cards and press SHOW. This reveals the Maal (Special Joker) and earns you points.",
+                    "Once you have at least 3 valid melds, you can press SHOW whenever you have 21 or 22 cards in your hand. You don't need to draw a card first if you already have the melds. This reveals the Maal (Special Joker) and earns you points.",
                     style = MaterialTheme.typography.bodyLarge
                 )
             }
@@ -163,7 +166,18 @@ fun BasicsOverlay(hasShown: Boolean, onDismiss: () -> Unit) {
 
         list.add {
             Column {
-                Text("6. The Maal (Special Joker)", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Text("6. Viewing Shown Cards", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    "When a player has shown their melds, you can view them by clicking the EYE (👁️) icon next to their names. This helps you track which cards are no longer in play.",
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            }
+        }
+
+        list.add {
+            Column {
+                Text("7. The Maal (Special Joker)", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(16.dp))
                 Text(
                     "When someone shows, a card is picked as the Maal. That card, and cards related to it, become Jokers:\n" +
@@ -178,7 +192,7 @@ fun BasicsOverlay(hasShown: Boolean, onDismiss: () -> Unit) {
 
         list.add {
             Column {
-                Text("7. Maal Calculation (Points)", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Text("8. Maal Calculation (Points)", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(16.dp))
                 Text(
                     "After showing, you gain points for these cards in your hand:\n" +
@@ -193,12 +207,48 @@ fun BasicsOverlay(hasShown: Boolean, onDismiss: () -> Unit) {
 
         list.add {
             Column {
-                Text("8. Winning", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Text("9. Winning", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(16.dp))
                 Text(
                     "Form 7 melds total to win. Your final score depends on your Maal points vs others.",
                     style = MaterialTheme.typography.bodyLarge
                 )
+            }
+        }
+
+        list.add {
+            Column {
+                Text("10. Card Highlights", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.height(16.dp))
+                Text("Cards are highlighted with different colors to help you identify their state:", style = MaterialTheme.typography.bodyLarge)
+                Spacer(modifier = Modifier.height(12.dp))
+
+                val highlights = listOf(
+                    Triple(Color.Yellow, "Last Drawn", "The card you just picked up from the Stock or Discard pile."),
+                    Triple(Color(0xFFFF69B4), "Selected", "Cards you've currently tapped for showing or discarding."),
+                    Triple(Color(0xFF4CAF50), "Melded", "Cards that are already part of a valid sequence or set."),
+                    Triple(Color.Cyan, "Maal Joker", "Cards that have become Jokers after the Maal is revealed."),
+                    Triple(Color.Red, "Hint / Warning", "Suggested cards to draw/discard or important alerts.")
+                )
+
+                highlights.forEach { (color, label, desc) ->
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(vertical = 6.dp).fillMaxWidth()
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(28.dp)
+                                .background(Color.White, RoundedCornerShape(4.dp))
+                                .border(3.dp, color, RoundedCornerShape(4.dp))
+                        )
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Column {
+                            Text(label, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = color)
+                            Text(desc, style = MaterialTheme.typography.bodyMedium)
+                        }
+                    }
+                }
             }
         }
         
@@ -272,19 +322,18 @@ fun GameEndOverlay(gameState: GameState, navController: NavController) {
         contentAlignment = Alignment.Center
     ) {
         Card(
-            modifier = Modifier.padding(16.dp).fillMaxWidth(0.9f).fillMaxHeight(0.85f),
+            modifier = Modifier.padding(8.dp).fillMaxWidth(0.95f).fillMaxHeight(0.95f),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
         ) {
-            Column(modifier = Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Column(modifier = Modifier.padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Text("Game Results", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(8.dp))
                 
-                // Fixed unresolved reference 'reason' to 'message' from Hint object
                 Text(text = gameState.hint?.message ?: "", style = MaterialTheme.typography.bodyLarge, textAlign = TextAlign.Center)
                 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(12.dp))
                 Text("Your Maal Breakdown", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(4.dp))
                 
                 Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
                     LazyVerticalGrid(
@@ -320,12 +369,18 @@ fun GameEndOverlay(gameState: GameState, navController: NavController) {
                     }
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    Button(onClick = { gameState.setupGame(4) }) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Button(
+                        onClick = { gameState.setupGame(4) },
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp)
+                    ) {
                         Text("Learn More")
                     }
-                    Button(onClick = { navController.navigate("player_selection") }) {
+                    Button(
+                        onClick = { navController.navigate("player_selection") },
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp)
+                    ) {
                         Text("Play without Hints")
                     }
                 }

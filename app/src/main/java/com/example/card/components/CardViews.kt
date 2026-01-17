@@ -130,8 +130,10 @@ fun PlayerHandView(
                 val isHinted = highlightedCards.any { it.isSameInstance(card) }
                 val isSelected = selectedCards.any { it.isSameInstance(card) }
                 val isMelded = gameState.meldedCards.any { it.isSameInstance(card) }
+                val isLastDrawn = gameState.lastDrawnCard?.isSameInstance(card) == true
                 
                 val displayBorder = when {
+                    isLastDrawn -> BorderStroke(3.dp, Color.Yellow) // Yellow for last drawn card
                     isMelded -> BorderStroke(2.dp, Color(0xFF4CAF50)) // Green for Melds
                     isJoker && (gameState.hasShown[1] == true) -> BorderStroke(2.dp, Color.Cyan)
                     else -> null

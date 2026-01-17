@@ -80,7 +80,7 @@ fun GameBoardScreen(
     navController: NavController,
     viewModel: GameViewModel = viewModel()
 ) {
-    // 1. FIX: Ensure initGame is only called ONCE when the screen opens.
+    // Ensure initGame is only called ONCE when the screen opens.
     LaunchedEffect(playerCount, showHints) {
         viewModel.initGame(playerCount, showHints)
     }
@@ -90,7 +90,7 @@ fun GameBoardScreen(
     val config = LocalConfiguration.current
     val screenHeight = config.screenHeightDp.dp
     
-    // 2. ADJUST SCALE: 0.22f provides a safe buffer for landscape/different aspect ratios
+    // ADJUST SCALE: 0.22f provides a safe buffer for landscape/different aspect ratios
     val cardHeight = (screenHeight * 0.22f).coerceAtMost(180.dp) 
     val cardWidth = cardHeight * 0.65f 
 
@@ -108,7 +108,7 @@ fun GameBoardScreen(
         }
     }
 
-    // 3. BACKGROUND AND CONTENT
+    // BACKGROUND AND CONTENT
     Box(modifier = Modifier.fillMaxSize().background(Color(0xFF1B5E20))) { // Dark Green felt color
         if (gameState.isInitializing) {
             LoadingScreen()
@@ -229,7 +229,7 @@ fun ActionButtons(gameState: GameState) {
         if (gameState.winner == null && gameState.currentPlayer == 1) {
             if (gameState.hasShown[1] == false && 
                 (gameState.currentTurnPhase == TurnPhase.DRAW || gameState.currentTurnPhase == TurnPhase.PLAY_OR_DISCARD || gameState.currentTurnPhase == TurnPhase.SHOW_OR_END) &&
-                (gameState.playerHands[1]?.size == 21 || (gameState.isFirstTurn && gameState.currentTurnPhase == TurnPhase.DRAW))
+                (gameState.playerHands[1]?.size == 21 || gameState.playerHands[1]?.size == 22 || (gameState.isFirstTurn && gameState.currentTurnPhase == TurnPhase.DRAW))
             ) {
                 val canShow = if (gameState.isFirstTurn && gameState.currentTurnPhase == TurnPhase.DRAW) {
                     if (gameState.selectedCards.size == 3) {
@@ -338,7 +338,7 @@ fun OverlayManager(
     // Basics Overlay
     if (viewModel.showHelp) {
         BasicsOverlay(
-            hasShown = gameState.hasShown[1] == true,
+            hasShown = gameState.hasShown[1] ?: false,
             onDismiss = { viewModel.toggleHelp(false) }
         )
     }
@@ -349,9 +349,7 @@ fun OverlayManager(
             onResume = { viewModel.togglePauseMenu(false) },
             onGoBack = { navController.navigate("startup") { popUpTo("startup") { inclusive = true } } },
             onLearnFromStart = { 
-                navController.navigate("game_board/4/true") {
-                    popUpTo("game_board/{playerCount}/{showHints}") { inclusive = true }
-                }
+                gameState.setupGame(gameState.playerCount)
                 viewModel.togglePauseMenu(false)
             }
         )

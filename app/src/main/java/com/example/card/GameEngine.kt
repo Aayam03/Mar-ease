@@ -103,22 +103,29 @@ object GameEngine {
 
     fun getFinalScoreReason(winner: Int, playerCount: Int, playerHands: Map<Int, List<Card>>, shownCards: Map<Int, List<Card>>, hasShown: Map<Int, Boolean>, maalCard: Card?): String {
         val maals = (1..playerCount).map { calculateMaal(it, playerHands, shownCards, hasShown, maalCard) }
+        val totalMaal = maals.sum()
+        val humanMaal = maals[0]
         
-        var winnerBonus = 0
-        for (p in 1..playerCount) {
-            if (p == winner) continue
-            winnerBonus += if (hasShown[p] == true) 5 else 10
+        // 1. Base Maal Difference calculation
+        val baseDiff = totalMaal - (playerCount * humanMaal)
+        
+        // 2. Winner Adjustment (calculated separately after base Maal diff)
+        // 3 points if shown, 10 if not shown
+        val winnerAdjustment = if (winner == 1) {
+            var humanCollects = 0
+            for (p in 2..playerCount) {
+                humanCollects += if (hasShown[p] == true) 3 else 10
+            }
+            -humanCollects // Negative diff means "Gain"
+        } else {
+            if (hasShown[1] == true) 3 else 10 // Positive diff means "Lose"
         }
 
-        val individualTotals = maals.mapIndexed { index, maal ->
-            if (index + 1 == winner) maal + winnerBonus else maal
-        }
+        val finalDiff = baseDiff + winnerAdjustment
+        val status = if (finalDiff > 0) "Lose" else "Gain"
+        
+        val maalsText = (1..playerCount).joinToString(", ") { "P$it: ${maals[it-1]}" }
 
-        val totalSum = individualTotals.sum()
-        val myIndTotal = individualTotals[0]
-        val diff = totalSum - (myIndTotal * playerCount)
-        val status = if (diff > 0) "Lose" else "Gain"
-
-        return "Winner: Player $winner. Final Diff: $diff. You $status ${abs(diff)} points."
+        return "Winner: Player $winner. Maal Points: $maalsText.\nFinal Adjustment: $finalDiff. You $status ${abs(finalDiff)} points."
     }
 }

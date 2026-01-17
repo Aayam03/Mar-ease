@@ -12,7 +12,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlin.math.abs
 import kotlin.random.Random
 
 enum class TurnPhase {
@@ -68,6 +67,9 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
     var isFirstTurn by mutableStateOf(true)
         private set
 
+    var lastDrawnCard by mutableStateOf<Card?>(null)
+        private set
+
     fun setupGame(count: Int) {
         viewModelScope.launch {
             isInitializing = true
@@ -78,7 +80,6 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
                     5 -> 4
                     else -> 5
                 }
-                // Corrected Joker count: 2 Jokers per deck
                 val cardPool = createCardPool(numberOfDecks, numberOfDecks * 2)
                 
                 withContext(Dispatchers.Main) {
@@ -88,17 +89,23 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
                     hasShown.clear()
                     shownCards.clear()
                     bonusMaalPoints.clear()
+                    meldedCards.clear()
+                    selectedCards.clear()
+                    
                     for (i in 1..playerCount) {
                         hasShown[i] = false
                         shownCards[i] = mutableStateListOf()
                         bonusMaalPoints[i] = 0
                     }
+                    
                     maalCard = null
                     winner = null
                     gameMessage = null
+                    currentPlayer = 1
                     currentTurnPhase = TurnPhase.DRAW
                     isFirstTurn = true
                     isInitializing = false
+                    lastDrawnCard = null
                     updateHint()
                 }
             }
@@ -115,11 +122,12 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
     }
 
     fun isJoker(card: Card, player: Int): Boolean {
-        return GameEngine.isJoker(card, player, hasShown, maalCard)
+        // Maal is only a Joker if it's visible (after show and hand size reduced to 12)
+        val visibleMaal = if (hasShown[player] == true && (playerHands[player]?.size ?: 0) <= 12) maalCard else null
+        return GameEngine.isJoker(card, player, hasShown, visibleMaal)
     }
 
     fun calculateMaal(player: Int): Int {
-        // Only include bonus if the player has actually fully shown later
         val bonus = if (hasShown[player] == true) (bonusMaalPoints[player] ?: 0) else 0
         return GameEngine.calculateMaal(player, playerHands, shownCards, hasShown, maalCard) + bonus
     }
@@ -133,35 +141,19 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
     }
 
     private fun explainFinalScores() {
-        val breakdown = StringBuilder()
-        val maals = (1..playerCount).map { p -> 
-            val score = calculateMaal(p)
-            breakdown.append("P$p Maal: $score. ")
-            score
-        }
-        
-        var winnerBonus = 0
-        winner?.let { w ->
-            for (p in 1..playerCount) {
-                if (p == w) continue
-                winnerBonus += if (hasShown[p] == true) 5 else 10
-            }
-        }
-
-        val individualTotals = maals.mapIndexed { index, maal ->
-            if (index + 1 == winner) maal + winnerBonus else maal
-        }
-
-        val totalSum = individualTotals.sum()
-        val myIndTotal = individualTotals[0]
-        val diff = totalSum - (myIndTotal * playerCount)
-        val status = if (diff > 0) "Lose" else "Gain"
+        val w = winner ?: return
+        val message = GameEngine.getFinalScoreReason(
+            w, 
+            playerCount, 
+            playerHands, 
+            shownCards, 
+            hasShown, 
+            maalCard
+        )
 
         hint = Hint(
             title = "Game Over!", 
-            message = "Winner: Player $winner. $breakdown\n" +
-            "Scoring Values: Joker (5), Maal Card (3), Same Rank Color (5), Neighbors (2).\n" +
-            "Final Calc: $totalSum - ($myIndTotal * $playerCount) = $diff. You $status ${abs(diff)} points."
+            message = message
         )
     }
 
@@ -185,12 +177,18 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
             animationState = null
             
             if (type == AnimationType.DRAW) {
-                isFirstTurn = false // Action taken, first turn window closed
                 if (player == 1) {
-                    currentTurnPhase = TurnPhase.PLAY_OR_DISCARD
+                    lastDrawnCard = card
+                }
+                isFirstTurn = false 
+                currentTurnPhase = TurnPhase.PLAY_OR_DISCARD
+                if (player == 1) {
                     updateHint()
                 }
             } else { // DISCARD
+                if (player == 1) {
+                    lastDrawnCard = null
+                }
                 handlePostDiscard(player)
             }
         }
@@ -203,7 +201,6 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
             checkWin(1)
             if (winner != null) return
 
-            // Check if player can show now (they have 21 cards)
             if (hasShown[1] == false && AiPlayer.findAllInitialMelds(hand).isNotEmpty()) {
                 currentTurnPhase = TurnPhase.SHOW_OR_END
                 updateHint()
@@ -212,7 +209,6 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
                 advanceTurn()
             }
         } else {
-            // AI Logic
             if (hasShown[player] == false) {
                 val initialMelds = AiPlayer.findAllInitialMelds(hand)
                 if (initialMelds.size >= 3) {
@@ -234,7 +230,6 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
 
     private fun pickMaalCard() {
         if (maalCard != null || stockPile.isEmpty()) return
-        // Skip jokers for the Maal card
         var index = 0
         while (index < stockPile.size && stockPile[index].rank == Rank.JOKER) {
             index++
@@ -242,7 +237,6 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
         maalCard = if (index < stockPile.size) {
             stockPile.removeAt(index)
         } else {
-            // All cards in stock are jokers (impossible with standard decks)
             stockPile.removeAt(0)
         }
     }
@@ -250,7 +244,7 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
     private fun showGameMessage(msg: String) {
         viewModelScope.launch {
             gameMessage = msg
-            delay(2500) // Slightly longer message display
+            delay(2500) 
             gameMessage = null
         }
     }
@@ -276,10 +270,9 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
     fun humanDiscardsCard(card: Card) {
         if (isInitializing || currentPlayer != 1 || currentTurnPhase != TurnPhase.PLAY_OR_DISCARD || winner != null) return
         val hand = playerHands[1] ?: return
-        
-        // Explain why not to throw away Jokers
+
         if (isJoker(card, 1)) {
-            showGameMessage("Don't throw away a Joker! It can replace any card in a meld, making it the most valuable card in your hand.")
+            showGameMessage("Don't throw away a Joker!")
             return
         }
 
@@ -288,53 +281,66 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
                 val idx = hand.indexOfFirst { it === card }
                 if (idx != -1) hand.removeAt(idx)
                 discardPile.add(card)
+
+                // --- TRIGGER MAAL REVEAL HERE ---
+                // If they have completed their show requirement but Maal is still hidden
+                if (hasShown[1] == true && maalCard == null) {
+                    pickMaalCard()
+                    showGameMessage("Maal Revealed!")
+                }
+                
+                // advanceTurn() is called automatically via handlePostDiscard(1) in moveCard
             }
         }
     }
 
     fun humanShows() {
-        if (isInitializing || currentPlayer != 1 || (currentTurnPhase != TurnPhase.DRAW && currentTurnPhase != TurnPhase.PLAY_OR_DISCARD && currentTurnPhase != TurnPhase.SHOW_OR_END)) return
+        if (isInitializing || currentPlayer != 1) return
         val hand = playerHands[1] ?: return
 
-        // Case 1: Special first turn show (3 jokers or 3 identical cards)
-        // Does NOT mark hasShown[1] = true, only records potential bonus and reveals Maal.
-        if (isFirstTurn && currentTurnPhase == TurnPhase.DRAW && hasShown[1] == false) {
-            if (selectedCards.size == 3) {
-                val jokers = selectedCards.filter { it.rank == Rank.JOKER }
-                val identical = selectedCards.all { it.rank == selectedCards[0].rank && it.suit == selectedCards[0].suit }
-                
-                if (jokers.size == 3 || identical) {
-                    val bonus = if (jokers.size == 3) 25 else 10
-                    val cardsToShow = selectedCards.toList()
-                    hand.removeByReference(cardsToShow)
-                    shownCards[1]?.addAll(cardsToShow)
-                    bonusMaalPoints[1] = bonus
-                    // Note: hasShown remains false until a standard 3-meld show occurs
-                    isFirstTurn = false
-                    showGameMessage("Special Maal Reveal! +$bonus Bonus pending.")
-                    
-                    pickMaalCard()
-                    humanDrawsFromStock()
-                    return
-                }
+        // --- 1. SPECIAL SHOW (3 Jokers or 3 Identical) ---
+        // This only applies if you select EXACTLY 3 cards and haven't done a special show yet.
+        if (hasShown[1] == false && selectedCards.size == 3 && (bonusMaalPoints[1] ?: 0) == 0 && currentTurnPhase == TurnPhase.DRAW && isFirstTurn) {
+            val jokers = selectedCards.filter { it.rank == Rank.JOKER }
+            val identical = selectedCards.size == 3 && selectedCards.all { it.rank == selectedCards[0].rank && it.suit == selectedCards[0].suit }
+
+            if (jokers.size == 3 || identical) {
+                val bonus = if (jokers.size == 3) 25 else 10
+                val cardsToShow = selectedCards.toList()
+                hand.removeByReference(cardsToShow)
+                shownCards[1]?.addAll(cardsToShow)
+                bonusMaalPoints[1] = bonus
+                isFirstTurn = false
+                showGameMessage("Special Show! Bonus secured. Show 2 more melds to see Maal.")
+                selectedCards.clear()
+                updateHint()
+                return 
             }
         }
 
-        // Case 2: Standard show (9 cards / 3 melds)
-        if (hand.size == 21 && selectedCards.size == 9 && hasShown[1] == false) {
+        // --- 2. INITIAL/MAAL SHOW (The "3 Runs" Logic) ---
+        val hasSpecialBonus = (bonusMaalPoints[1] ?: 0) > 0
+        val requiredCardCount = if (hasSpecialBonus) 6 else 9
+        val requiredMeldCount = if (hasSpecialBonus) 2 else 3
+
+        if (hasShown[1] == false && selectedCards.size == requiredCardCount) {
             val melds = AiPlayer.findAllInitialMelds(selectedCards.toList())
-            if (melds.size >= 3) {
+            
+            if (melds.size >= requiredMeldCount) {
                 val meldedCards = melds.flatten()
                 hand.removeByReference(meldedCards)
                 shownCards[1]?.addAll(meldedCards)
-                hasShown[1] = true
-                showGameMessage("You have shown!")
-                
-                pickMaalCard()
-                
-                currentTurnPhase = TurnPhase.ENDED
-                advanceTurn()
+                hasShown[1] = true 
+
+                showGameMessage("Success! Now discard a card to see Maal.")
+                selectedCards.clear()
+                currentTurnPhase = TurnPhase.PLAY_OR_DISCARD
+                updateHint()
+            } else {
+                showGameMessage("Invalid Melds! You need $requiredMeldCount valid sequences.")
             }
+        } else if (hasShown[1] == false) {
+            showGameMessage("Select $requiredCardCount cards to show your hand.")
         }
     }
 
@@ -347,30 +353,19 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
 
     fun toggleCardSelection(card: Card) {
         if (isInitializing || currentPlayer != 1 || winner != null) return
-        
-        // Use reference equality (===) to select individual cards even if they have the same rank/suit
+
         val isAlreadySelected = selectedCards.any { it === card }
 
-        // Allowed to select cards in DRAW phase ONLY for special first turn show
-        if (currentTurnPhase == TurnPhase.DRAW && isFirstTurn) {
-            if (isAlreadySelected) {
-                selectedCards.removeAll { it === card }
-            } else {
-                if (selectedCards.size < 3) selectedCards.add(card)
-            }
-            return
-        }
-
-        if (currentTurnPhase == TurnPhase.SHOW_OR_END || (currentTurnPhase == TurnPhase.PLAY_OR_DISCARD && hasShown[1] != true)) {
-            if (isAlreadySelected) {
-                selectedCards.removeAll { it === card }
-            } else {
-                selectedCards.add(card)
-            }
+        if (isAlreadySelected) {
+            selectedCards.removeAll { it === card }
         } else {
-            if (isAlreadySelected) {
-                selectedCards.removeAll { it === card }
-            } else {
+            // Determine max cards based on game phase
+            val maxAllowed = if (hasShown[1] == true) 1 else 9
+
+            if (selectedCards.size < maxAllowed) {
+                selectedCards.add(card)
+            } else if (maxAllowed == 1) {
+                // Swap selection if only 1 is allowed
                 selectedCards.clear()
                 selectedCards.add(card)
             }
@@ -390,41 +385,43 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
     }
 
     private fun processAiTurn() {
+        val myPlayerId = currentPlayer
         viewModelScope.launch {
-            val aiHand = playerHands[currentPlayer] ?: return@launch
+            val aiHand = playerHands[myPlayerId] ?: return@launch
             try {
-                // AI Special Show Check
-                if (isFirstTurn) {
+                if (isFirstTurn && currentPlayer == myPlayerId) {
                     val jokers = aiHand.filter { it.rank == Rank.JOKER }
                     val identical = aiHand.groupBy { it }.filter { it.value.size >= 3 }
                     
                     if (jokers.size >= 3) {
                         val cards = jokers.take(3)
                         aiHand.removeByReference(cards)
-                        shownCards[currentPlayer]?.addAll(cards)
-                        bonusMaalPoints[currentPlayer] = 25
+                        shownCards[myPlayerId]?.addAll(cards)
+                        bonusMaalPoints[myPlayerId] = 25
                         pickMaalCard()
                     } else if (identical.isNotEmpty()) {
                         val cards = identical.values.first().take(3)
                         aiHand.removeByReference(cards)
-                        shownCards[currentPlayer]?.addAll(cards)
-                        bonusMaalPoints[currentPlayer] = 10
+                        shownCards[myPlayerId]?.addAll(cards)
+                        bonusMaalPoints[myPlayerId] = 10
                         pickMaalCard()
                     }
                 }
 
                 delay(500)
+                if (currentPlayer != myPlayerId || currentTurnPhase != TurnPhase.DRAW) return@launch
+
                 val cardFromDiscard = discardPile.lastOrNull()
                 
-                if (cardFromDiscard != null && AiPlayer.shouldTakeCard(aiHand, cardFromDiscard, this@GameState, currentPlayer)) {
+                if (cardFromDiscard != null && AiPlayer.shouldTakeCard(aiHand, cardFromDiscard, this@GameState, myPlayerId)) {
                     val card = discardPile.last()
-                    moveCard(card, currentPlayer, AnimationType.DRAW, AnimationSource.DISCARD) {
+                    moveCard(card, myPlayerId, AnimationType.DRAW, AnimationSource.DISCARD) {
                         discardPile.removeAt(discardPile.lastIndex)
                         aiHand.add(card)
                     }
                 } else if (stockPile.isNotEmpty()) {
                     val card = stockPile.first()
-                    moveCard(card, currentPlayer, AnimationType.DRAW, AnimationSource.STOCK) {
+                    moveCard(card, myPlayerId, AnimationType.DRAW, AnimationSource.STOCK) {
                         stockPile.removeAt(0)
                         aiHand.add(card)
                     }
@@ -434,19 +431,20 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
                 }
                 
                 delay(1000) 
-                if (winner != null) return@launch
+                if (winner != null || currentPlayer != myPlayerId) return@launch
 
-                // Play Phase
-                val decision = AiPlayer.findCardToDiscard(aiHand, this@GameState, currentPlayer)
-                val cardToDiscard = decision.card
-                moveCard(cardToDiscard, currentPlayer, AnimationType.DISCARD, AnimationSource.PLAYER) {
-                    val idx = aiHand.indexOfFirst { it === cardToDiscard }
-                    if (idx != -1) aiHand.removeAt(idx)
-                    discardPile.add(cardToDiscard)
+                if (currentTurnPhase == TurnPhase.PLAY_OR_DISCARD) {
+                    val decision = AiPlayer.findCardToDiscard(aiHand, this@GameState, myPlayerId)
+                    val cardToDiscard = decision.card
+                    moveCard(cardToDiscard, myPlayerId, AnimationType.DISCARD, AnimationSource.PLAYER) {
+                        val idx = aiHand.indexOfFirst { it === cardToDiscard }
+                        if (idx != -1) aiHand.removeAt(idx)
+                        discardPile.add(cardToDiscard)
+                    }
                 }
 
             } catch (ignore: Exception) {
-                if (winner == null) advanceTurn()
+                if (winner == null && currentPlayer == myPlayerId) advanceTurn()
             }
         }
     }
@@ -459,7 +457,6 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
         }
         val humanHand = playerHands[1] ?: return
         
-        // Always update melded cards in Learn Mode
         meldedCards.clear()
         meldedCards.addAll(AiPlayer.findAllMeldedCards(humanHand, this, 1))
 
@@ -477,6 +474,14 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
                     }
                 }
 
+                if (hasShown[1] == false) {
+                    val melds = AiPlayer.findAllInitialMelds(humanHand)
+                    if (melds.size >= 3) {
+                        hint = Hint(title = "Show Before Drawing", message = "You already have the 3 required melds! Select them and press SHOW to reveal Maal before taking a card.", cards = meldedCards.toList())
+                        return
+                    }
+                }
+
                 val cardFromDiscard = discardPile.lastOrNull()
                 hint = if (cardFromDiscard != null && AiPlayer.shouldTakeCard(humanHand, cardFromDiscard, this, 1)) {
                     Hint(title = "Draw Discard", message = "You should take the ${cardFromDiscard.rank.symbol}${cardFromDiscard.suit.symbol} from the discard pile. It forms a meld or a strong connection.", cards = listOf(cardFromDiscard))
@@ -486,29 +491,36 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
             }
             TurnPhase.PLAY_OR_DISCARD -> {
                 if (hasShown[1] == false) {
-                    val melds = AiPlayer.findAllInitialMelds(humanHand)
-                    if (melds.size >= 3 && humanHand.size == 21) {
-                        hint = Hint(title = "Choose Melds to Show", message = "You should select the 9 cards forming your 3 melds, then press SHOW. Jokers cannot be used in runs for the initial show.", cards = melds.flatten())
-                    } else if (melds.size >= 3 && humanHand.size == 22) {
-                        val options = AiPlayer.findBestDiscardOptions(humanHand, this, 1)
-                        hint = Hint(title = "Discard to Show", message = "You have the required 3 melds! However, you must first discard one card to have exactly 21 before you can perform a 'Show'.", cards = options)
+                    val hand = playerHands[1] ?: emptyList()
+                    val req = if ((bonusMaalPoints[1] ?: 0) > 0) 6 else 9
+                    val possibleInitial = AiPlayer.findAllInitialMelds(hand)
+                    val reqMelds = if ((bonusMaalPoints[1] ?: 0) > 0) 2 else 3
+
+                    if (possibleInitial.size >= reqMelds) {
+                        hint = Hint(
+                            title = "Ready to Show",
+                            message = "Select your $req cards for the melds and press SHOW.",
+                            cards = possibleInitial.flatten().take(req)
+                        )
                     } else {
-                        val decision = AiPlayer.findCardToDiscard(humanHand, this, 1)
+                        val decision = AiPlayer.findCardToDiscard(hand, this, 1)
                         hint = Hint(title = "Suggested Discard", message = decision.reason, cards = listOf(decision.card))
                     }
+                } else if (maalCard == null || (playerHands[1]?.size ?: 0) > 12) {
+                    hint = Hint(title = "Final Step", message = "Discard any card to view the Maal and end your turn.")
                 } else {
-                    if (AiPlayer.canFinish(humanHand, this, 1)) {
-                        hint = Hint(title = "Finish!", message = "You have 7 valid melds. You should discard any 13th card to win!")
-                    } else {
-                        val decision = AiPlayer.findCardToDiscard(humanHand, this, 1)
-                        hint = Hint(title = "Suggested Discard", message = decision.reason, cards = listOf(decision.card))
-                    }
+                    val decision = AiPlayer.findCardToDiscard(humanHand, this, 1)
+                    hint = Hint(
+                        title = "Strategic Discard",
+                        message = decision.reason,
+                        cards = listOf(decision.card)
+                    )
                 }
             }
             TurnPhase.SHOW_OR_END -> {
                 val melds = AiPlayer.findAllInitialMelds(humanHand)
                 hint = if (melds.isNotEmpty()) {
-                    Hint(title = "Show Now?", message = "You should select your 9 melded cards and press SHOW, or End Turn if you want to wait.", cards = melds.flatten())
+                    Hint(title = "Show Now?", message = "You should select your 9 melded cards and press SHOW, or End Turn if you want to wait.", cards = meldedCards.toList())
                 } else {
                     Hint(title = "Strategy", message = "You should end your turn if no further melds can be formed.")
                 }
@@ -519,7 +531,7 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
 
     private fun MutableList<Card>.removeByReference(toRemove: List<Card>) {
         toRemove.forEach { card ->
-            val idx = indexOfFirst { it === card }
+            val idx = indexOfFirst { it.isSameInstance(card) }
             if (idx != -1) removeAt(idx)
         }
     }
@@ -537,7 +549,9 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
     }
 
     private fun dealCards(playerCount: Int, cardPool: MutableList<Card>) {
-        playerHands.clear(); stockPile.clear()
+        playerHands.clear()
+        stockPile.clear()
+        discardPile.clear()
         for (i in 1..playerCount) { 
             playerHands[i] = mutableStateListOf() 
         }
