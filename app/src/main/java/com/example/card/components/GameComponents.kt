@@ -141,15 +141,16 @@ fun PlayerIndicator(player: Int, gameState: GameState, onPlayerIconPositioned: (
 fun HintView(hint: Hint?, modifier: Modifier = Modifier) {
     if (hint == null) return
     Card(
-        modifier = modifier.width(280.dp), 
+        modifier = modifier.width(280.dp),
         shape = RoundedCornerShape(8.dp),
         elevation = CardDefaults.cardElevation(4.dp),
         colors = CardDefaults.cardColors(containerColor = Color.Black.copy(alpha = 0.7f))
     ) {
-        Column(modifier = padding(14.dp)) {
-            Text(text = "Hint: ${hint.title}", fontWeight = FontWeight.Bold, color = Color.White, fontSize = 24.sp) 
+        // Fixed "padd" to "Modifier.padding"
+        Column(modifier = Modifier.padding(14.dp)) {
+            Text(text = "Hint: ${hint.title}", fontWeight = FontWeight.Bold, color = Color.White, fontSize = 24.sp)
             Spacer(modifier = Modifier.height(6.dp))
-            Text(hint.message, color = Color.White, fontSize = 18.sp, lineHeight = 22.sp) 
+            Text(hint.message, color = Color.White, fontSize = 18.sp, lineHeight = 22.sp)
         }
     }
 }

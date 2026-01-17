@@ -14,6 +14,18 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.random.Random
 
+fun MutableList<Card>.removeByReference(cardsToRemove: List<Card>) {
+    cardsToRemove.forEach { cardToRemove ->
+        val iterator = this.iterator()
+        while (iterator.hasNext()) {
+            if (iterator.next() === cardToRemove) {
+                iterator.remove()
+                break
+            }
+        }
+    }
+}
+
 enum class TurnPhase {
     DRAW,
     PLAY_OR_DISCARD,
@@ -23,6 +35,7 @@ enum class TurnPhase {
 
 enum class AnimationType { DRAW, DISCARD }
 enum class AnimationSource { STOCK, DISCARD, PLAYER }
+
 data class AnimationState(
     val card: Card,
     val player: Int,
@@ -101,12 +114,21 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
                     maalCard = null
                     winner = null
                     gameMessage = null
-                    currentPlayer = 1
+                    
+                    // --- FIX: RANDOMIZE STARTING PLAYER ---
+                    currentPlayer = Random.nextInt(1, count + 1) 
+                    
                     currentTurnPhase = TurnPhase.DRAW
                     isFirstTurn = true
                     isInitializing = false
                     lastDrawnCard = null
-                    updateHint()
+
+                    // If AI starts, trigger their turn
+                    if (currentPlayer != 1) {
+                        processAiTurn()
+                    } else {
+                        updateHint()
+                    }
                 }
             }
         }
@@ -126,7 +148,7 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
         val visibleMaal = if (hasShown[player] == true && (playerHands[player]?.size ?: 0) <= 12) maalCard else null
         return GameEngine.isJoker(card, player, hasShown, visibleMaal)
     }
-
+    
     fun calculateMaal(player: Int): Int {
         val bonus = if (hasShown[player] == true) (bonusMaalPoints[player] ?: 0) else 0
         return GameEngine.calculateMaal(player, playerHands, shownCards, hasShown, maalCard) + bonus
@@ -288,8 +310,6 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
                     pickMaalCard()
                     showGameMessage("Maal Revealed!")
                 }
-                
-                // advanceTurn() is called automatically via handlePostDiscard(1) in moveCard
             }
         }
     }
@@ -299,10 +319,17 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
         val hand = playerHands[1] ?: return
 
         // --- 1. SPECIAL SHOW (3 Jokers or 3 Identical) ---
-        // This only applies if you select EXACTLY 3 cards and haven't done a special show yet.
-        if (hasShown[1] == false && selectedCards.size == 3 && (bonusMaalPoints[1] ?: 0) == 0 && currentTurnPhase == TurnPhase.DRAW && isFirstTurn) {
+        // RULE: Only before drawing (TurnPhase.DRAW) and on the very first turn
+        if (hasShown[1] == false && 
+            selectedCards.size == 3 && 
+            (bonusMaalPoints[1] ?: 0) == 0 && 
+            currentTurnPhase == TurnPhase.DRAW && // Must be before drawing
+            isFirstTurn) { 
+            
             val jokers = selectedCards.filter { it.rank == Rank.JOKER }
-            val identical = selectedCards.size == 3 && selectedCards.all { it.rank == selectedCards[0].rank && it.suit == selectedCards[0].suit }
+            val identical = selectedCards.size == 3 && selectedCards.all { 
+                it.rank == selectedCards[0].rank && it.suit == selectedCards[0].suit 
+            }
 
             if (jokers.size == 3 || identical) {
                 val bonus = if (jokers.size == 3) 25 else 10
@@ -310,15 +337,18 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
                 hand.removeByReference(cardsToShow)
                 shownCards[1]?.addAll(cardsToShow)
                 bonusMaalPoints[1] = bonus
-                isFirstTurn = false
-                showGameMessage("Special Show! Bonus secured. Show 2 more melds to see Maal.")
+                
+                // Reveal maal immediately for special show on first turn
+                pickMaalCard()
+                
+                showGameMessage("Special Show! Bonus secured.")
                 selectedCards.clear()
                 updateHint()
                 return 
             }
         }
 
-        // --- 2. INITIAL/MAAL SHOW (The "3 Runs" Logic) ---
+        // --- 2. INITIAL/MAAL SHOW (9 cards) ---
         val hasSpecialBonus = (bonusMaalPoints[1] ?: 0) > 0
         val requiredCardCount = if (hasSpecialBonus) 6 else 9
         val requiredMeldCount = if (hasSpecialBonus) 2 else 3
@@ -332,15 +362,22 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
                 shownCards[1]?.addAll(meldedCards)
                 hasShown[1] = true 
 
-                showGameMessage("Success! Now discard a card to see Maal.")
+                if (currentTurnPhase == TurnPhase.DRAW) {
+                    showGameMessage("Success! Now draw your card.")
+                } else {
+                    showGameMessage("Success! Now discard to see Maal.")
+                    currentTurnPhase = TurnPhase.PLAY_OR_DISCARD
+                }
                 selectedCards.clear()
-                currentTurnPhase = TurnPhase.PLAY_OR_DISCARD
                 updateHint()
             } else {
-                showGameMessage("Invalid Melds! You need $requiredMeldCount valid sequences.")
+                showGameMessage("Invalid Melds!")
             }
         } else if (hasShown[1] == false) {
-            showGameMessage("Select $requiredCardCount cards to show your hand.")
+            val msg = if (currentTurnPhase == TurnPhase.DRAW && isFirstTurn) 
+                "You can perform a Special Show (3 cards) or select 9 cards for a regular show."
+                else "Select $requiredCardCount cards to show."
+            showGameMessage(msg)
         }
     }
 
@@ -507,7 +544,8 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
                         hint = Hint(title = "Suggested Discard", message = decision.reason, cards = listOf(decision.card))
                     }
                 } else if (maalCard == null || (playerHands[1]?.size ?: 0) > 12) {
-                    hint = Hint(title = "Final Step", message = "Discard any card to view the Maal and end your turn.")
+                    val decision = AiPlayer.findCardToDiscard(humanHand, this, 1)
+                    hint = Hint(title = "Final Step", message = "Discard ${decision.card.rank.symbol} to view the Maal and end your turn.", cards = listOf(decision.card))
                 } else {
                     val decision = AiPlayer.findCardToDiscard(humanHand, this, 1)
                     hint = Hint(
@@ -526,13 +564,6 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
                 }
             }
             TurnPhase.ENDED -> hint = null
-        }
-    }
-
-    private fun MutableList<Card>.removeByReference(toRemove: List<Card>) {
-        toRemove.forEach { card ->
-            val idx = indexOfFirst { it.isSameInstance(card) }
-            if (idx != -1) removeAt(idx)
         }
     }
 

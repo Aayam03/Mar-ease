@@ -28,7 +28,10 @@ import kotlinx.coroutines.delay
 @Composable
 fun CardGameApp() {
     val navController = rememberNavController()
-    NavHost(navController = navController, startDestination = "startup") {
+    NavHost(navController = navController, startDestination = "login") {
+        composable("login") {
+            LoginScreen(navController = navController)
+        }
         composable("startup") {
             StartupScreen(navController = navController)
         }
