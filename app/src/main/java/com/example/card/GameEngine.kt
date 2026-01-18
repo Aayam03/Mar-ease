@@ -101,7 +101,7 @@ object GameEngine {
         return getDetailedMaalBreakdown(player, playerHands, shownCards, hasShown, maalCard).sumOf { it.points }
     }
 
-    fun getFinalScoreReason(winner: Int, playerCount: Int, playerHands: Map<Int, List<Card>>, shownCards: Map<Int, List<Card>>, hasShown: Map<Int, Boolean>, maalCard: Card?): String {
+    fun getFinalScoreDifference(winner: Int, playerCount: Int, playerHands: Map<Int, List<Card>>, shownCards: Map<Int, List<Card>>, hasShown: Map<Int, Boolean>, maalCard: Card?): Int {
         val maals = (1..playerCount).map { calculateMaal(it, playerHands, shownCards, hasShown, maalCard) }
         val totalMaal = maals.sum()
         val humanMaal = maals[0]
@@ -109,21 +109,24 @@ object GameEngine {
         // 1. Base Maal Difference calculation
         val baseDiff = totalMaal - (playerCount * humanMaal)
         
-        // 2. Winner Adjustment (calculated separately after base Maal diff)
-        // 3 points if shown, 10 if not shown
+        // 2. Winner Adjustment
         val winnerAdjustment = if (winner == 1) {
             var humanCollects = 0
             for (p in 2..playerCount) {
                 humanCollects += if (hasShown[p] == true) 3 else 10
             }
-            -humanCollects // Negative diff means "Gain"
+            -humanCollects 
         } else {
-            if (hasShown[1] == true) 3 else 10 // Positive diff means "Lose"
+            if (hasShown[1] == true) 3 else 10
         }
 
-        val finalDiff = baseDiff + winnerAdjustment
+        return baseDiff + winnerAdjustment
+    }
+
+    fun getFinalScoreReason(winner: Int, playerCount: Int, playerHands: Map<Int, List<Card>>, shownCards: Map<Int, List<Card>>, hasShown: Map<Int, Boolean>, maalCard: Card?): String {
+        val finalDiff = getFinalScoreDifference(winner, playerCount, playerHands, shownCards, hasShown, maalCard)
+        val maals = (1..playerCount).map { calculateMaal(it, playerHands, shownCards, hasShown, maalCard) }
         val status = if (finalDiff > 0) "Lose" else "Gain"
-        
         val maalsText = (1..playerCount).joinToString(", ") { "P$it: ${maals[it-1]}" }
 
         return "Winner: Player $winner. Maal Points: $maalsText.\nFinal Adjustment: $finalDiff. You $status ${abs(finalDiff)} points."

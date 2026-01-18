@@ -64,7 +64,6 @@ fun StartupScreen(navController: NavController, viewModel: GameViewModel = viewM
     val logoSize = (config.screenHeightDp.dp * 0.3f).coerceAtLeast(150.dp)
     
     Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-        // Profile Icon in top right
         Box(modifier = Modifier.align(Alignment.TopEnd).padding(16.dp)) {
             UserProfileIcon(showHints = false, viewModel = viewModel)
         }
@@ -189,8 +188,19 @@ fun GameBoardScreen(
 
     LaunchedEffect(gameState.winner) {
         if (gameState.winner != null) {
-            val points = gameState.calculateMaal(1)
-            viewModel.updateStats(showHints, points)
+            val finalPointsDiff = GameEngine.getFinalScoreDifference(
+                gameState.winner!!, 
+                gameState.playerCount, 
+                gameState.playerHands, 
+                gameState.shownCards, 
+                gameState.hasShown, 
+                gameState.maalCard
+            )
+            // Note: finalPointsDiff is "Adjustment". 
+            // Negative adjustment means human GAINED points relative to others.
+            // Positive adjustment means human LOST points.
+            // To save as "Score", we save the negative of the adjustment.
+            viewModel.updateStats(showHints, -finalPointsDiff)
         }
     }
 
@@ -503,7 +513,7 @@ fun MainGameLayoutPlay(
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("Maal", color = Color.White, fontSize = 12.sp)
                     Box(modifier = Modifier.size(cardWidth * 0.7f, cardHeight * 0.7f)) {
-                        val isMaalVisible = gameState.maalCard != null
+                        val isMaalVisible = gameState.hasShown[1] == true && gameState.maalCard != null
                         if (isMaalVisible && gameState.maalCard != null) {
                             CardView(card = gameState.maalCard, faceUp = true, modifier = Modifier.fillMaxSize())
                         } else {
