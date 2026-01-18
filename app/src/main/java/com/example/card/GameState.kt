@@ -70,12 +70,11 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
     var maalCard by mutableStateOf<Card?>(null)
     val hasShown = mutableStateMapOf<Int, Boolean>()
     
-    // To track "Special Shows" from the first turn
     val bonusMaalPoints = mutableStateMapOf<Int, Int>()
 
     val selectedCards = mutableStateListOf<Card>()
     val playerIcons = mutableStateMapOf<Int, String>()
-    private val availableIcons = listOf("🤖", "👽", "👾", "👺", "🤡", "👻")
+    private val availableIcons = listOf("🤖", "👽", "👾", "👺", "👺", "👻")
 
     var isFirstTurn by mutableStateOf(true)
         private set
@@ -115,7 +114,6 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
                     winner = null
                     gameMessage = null
                     
-                    // --- FIX: RANDOMIZE STARTING PLAYER ---
                     currentPlayer = Random.nextInt(1, count + 1) 
                     
                     currentTurnPhase = TurnPhase.DRAW
@@ -123,7 +121,6 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
                     isInitializing = false
                     lastDrawnCard = null
 
-                    // If AI starts, trigger their turn
                     if (currentPlayer != 1) {
                         processAiTurn()
                     } else {
@@ -144,8 +141,7 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
     }
 
     fun isJoker(card: Card, player: Int): Boolean {
-        // Maal is only a Joker if it's visible (after show and hand size reduced to 12)
-        val visibleMaal = if (hasShown[player] == true && (playerHands[player]?.size ?: 0) <= 12) maalCard else null
+        val visibleMaal = if (hasShown[player] == true) maalCard else null
         return GameEngine.isJoker(card, player, hasShown, visibleMaal)
     }
     
@@ -304,8 +300,6 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
                 if (idx != -1) hand.removeAt(idx)
                 discardPile.add(card)
 
-                // --- TRIGGER MAAL REVEAL HERE ---
-                // If they have completed their show requirement but Maal is still hidden
                 if (hasShown[1] == true && maalCard == null) {
                     pickMaalCard()
                     showGameMessage("Maal Revealed!")
@@ -318,12 +312,10 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
         if (isInitializing || currentPlayer != 1) return
         val hand = playerHands[1] ?: return
 
-        // --- 1. SPECIAL SHOW (3 Jokers or 3 Identical) ---
-        // RULE: Only before drawing (TurnPhase.DRAW) and on the very first turn
         if (hasShown[1] == false && 
             selectedCards.size == 3 && 
             (bonusMaalPoints[1] ?: 0) == 0 && 
-            currentTurnPhase == TurnPhase.DRAW && // Must be before drawing
+            currentTurnPhase == TurnPhase.DRAW && 
             isFirstTurn) { 
             
             val jokers = selectedCards.filter { it.rank == Rank.JOKER }
@@ -337,10 +329,7 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
                 hand.removeByReference(cardsToShow)
                 shownCards[1]?.addAll(cardsToShow)
                 bonusMaalPoints[1] = bonus
-                
-                // Reveal maal immediately for special show on first turn
                 pickMaalCard()
-                
                 showGameMessage("Special Show! Bonus secured.")
                 selectedCards.clear()
                 updateHint()
@@ -348,7 +337,6 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
             }
         }
 
-        // --- 2. INITIAL/MAAL SHOW (9 cards) ---
         val hasSpecialBonus = (bonusMaalPoints[1] ?: 0) > 0
         val requiredCardCount = if (hasSpecialBonus) 6 else 9
         val requiredMeldCount = if (hasSpecialBonus) 2 else 3
@@ -362,12 +350,16 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
                 shownCards[1]?.addAll(meldedCards)
                 hasShown[1] = true 
 
-                if (currentTurnPhase == TurnPhase.DRAW) {
-                    showGameMessage("Success! Now draw your card.")
-                } else {
-                    showGameMessage("Success! Now discard to see Maal.")
+                val message = if (maalCard != null) "Success! Maal is already visible." 
+                             else if (currentTurnPhase == TurnPhase.DRAW) "Success! Now draw your card."
+                             else "Success! Now discard to see Maal."
+                
+                showGameMessage(message)
+                
+                if (currentTurnPhase != TurnPhase.DRAW) {
                     currentTurnPhase = TurnPhase.PLAY_OR_DISCARD
                 }
+                
                 selectedCards.clear()
                 updateHint()
             } else {
@@ -396,13 +388,11 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
         if (isAlreadySelected) {
             selectedCards.removeAll { it === card }
         } else {
-            // Determine max cards based on game phase
             val maxAllowed = if (hasShown[1] == true) 1 else 9
 
             if (selectedCards.size < maxAllowed) {
                 selectedCards.add(card)
             } else if (maxAllowed == 1) {
-                // Swap selection if only 1 is allowed
                 selectedCards.clear()
                 selectedCards.add(card)
             }
@@ -543,24 +533,26 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
                         val decision = AiPlayer.findCardToDiscard(hand, this, 1)
                         hint = Hint(title = "Suggested Discard", message = decision.reason, cards = listOf(decision.card))
                     }
-                } else if (maalCard == null || (playerHands[1]?.size ?: 0) > 12) {
+                } else if (maalCard == null) {
                     val decision = AiPlayer.findCardToDiscard(humanHand, this, 1)
-                    hint = Hint(title = "Final Step", message = "Discard ${decision.card.rank.symbol} to view the Maal and end your turn.", cards = listOf(decision.card))
+                    hint = Hint(title = "Final Step", message = "Discard ${decision.card.rank.symbol} to reveal the Maal and end your turn.", cards = listOf(decision.card))
                 } else {
                     val decision = AiPlayer.findCardToDiscard(humanHand, this, 1)
-                    hint = Hint(
-                        title = "Strategic Discard",
-                        message = decision.reason,
-                        cards = listOf(decision.card)
-                    )
+                    val title = if (isFirstTurn) "Next Step" else "Strategic Discard"
+                    val msg = if (isFirstTurn) "Now discard ${decision.card.rank.symbol} to end your turn and finalize your show." else decision.reason
+                    hint = Hint(title = title, message = msg, cards = listOf(decision.card))
                 }
             }
             TurnPhase.SHOW_OR_END -> {
-                val melds = AiPlayer.findAllInitialMelds(humanHand)
-                hint = if (melds.isNotEmpty()) {
-                    Hint(title = "Show Now?", message = "You should select your 9 melded cards and press SHOW, or End Turn if you want to wait.", cards = meldedCards.toList())
+                if (hasShown[1] == true) {
+                    hint = Hint(title = "End Turn", message = "You have already shown. Press END TURN to let others play.")
                 } else {
-                    Hint(title = "Strategy", message = "You should end your turn if no further melds can be formed.")
+                    val melds = AiPlayer.findAllInitialMelds(humanHand)
+                    hint = if (melds.isNotEmpty()) {
+                        Hint(title = "Show Now?", message = "You should select your 9 melded cards and press SHOW, or End Turn if you want to wait.", cards = meldedCards.toList())
+                    } else {
+                        Hint(title = "Strategy", message = "You should end your turn if no further melds can be formed.")
+                    }
                 }
             }
             TurnPhase.ENDED -> hint = null

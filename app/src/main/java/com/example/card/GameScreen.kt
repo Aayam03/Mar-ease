@@ -4,13 +4,19 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -22,7 +28,9 @@ import androidx.navigation.NavController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import coil.compose.AsyncImage
 import com.example.card.components.*
+import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.delay
 
 @Composable
@@ -51,27 +59,97 @@ fun CardGameApp() {
 }
 
 @Composable
-fun StartupScreen(navController: NavController) {
+fun StartupScreen(navController: NavController, viewModel: GameViewModel = viewModel()) {
     val config = LocalConfiguration.current
     val logoSize = (config.screenHeightDp.dp * 0.3f).coerceAtLeast(150.dp)
     
-    Column(
-        modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        Image(
-            painter = painterResource(id = R.drawable.mar_ease), 
-            contentDescription = "Mar-ease Logo",
-            modifier = Modifier.size(logoSize)
-        )
-        Spacer(modifier = Modifier.height(32.dp))
-        Button(onClick = { navController.navigate("game_board/4/true") }) {
-            Text("Learn", fontSize = 18.sp)
+    Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+        // Profile Icon in top right
+        Box(modifier = Modifier.align(Alignment.TopEnd).padding(16.dp)) {
+            UserProfileIcon(showHints = false, viewModel = viewModel)
         }
-        Spacer(modifier = Modifier.height(16.dp))
-        Button(onClick = { navController.navigate("player_selection") }) {
-            Text("Play", fontSize = 18.sp)
+
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Image(
+                painter = painterResource(id = R.drawable.mar_ease), 
+                contentDescription = "Mar-ease Logo",
+                modifier = Modifier.size(logoSize)
+            )
+            Spacer(modifier = Modifier.height(32.dp))
+            Button(onClick = { navController.navigate("game_board/4/true") }) {
+                Text("Learn", fontSize = 18.sp)
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+            Button(onClick = { navController.navigate("player_selection") }) {
+                Text("Play", fontSize = 18.sp)
+            }
+        }
+    }
+}
+
+@Composable
+fun UserProfileIcon(showHints: Boolean, viewModel: GameViewModel) {
+    val user = FirebaseAuth.getInstance().currentUser ?: return
+    var showProfileDetails by remember { mutableStateOf(false) }
+    val stats = viewModel.userStats
+
+    Box(modifier = Modifier.padding(16.dp)) {
+        if (user.photoUrl != null) {
+            AsyncImage(
+                model = user.photoUrl,
+                contentDescription = "User Profile",
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .clickable { showProfileDetails = !showProfileDetails },
+                contentScale = ContentScale.Crop
+            )
+        } else {
+            Surface(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .clickable { showProfileDetails = !showProfileDetails },
+                color = MaterialTheme.colorScheme.secondary
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Person,
+                    contentDescription = "User Profile",
+                    modifier = Modifier.padding(8.dp),
+                    tint = Color.White
+                )
+            }
+        }
+
+        if (showProfileDetails) {
+            Card(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(top = 48.dp)
+                    .width(220.dp),
+                shape = RoundedCornerShape(12.dp),
+                elevation = CardDefaults.cardElevation(8.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.Black.copy(alpha = 0.9f))
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(text = user.displayName ?: "Guest", color = Color.White, fontWeight = FontWeight.Bold)
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = Color.Gray)
+                    
+                    if (showHints) {
+                        Text(text = "LEARN MODE", color = Color.Yellow, fontSize = 10.sp, fontWeight = FontWeight.ExtraBold)
+                        Text(text = "Games: ${stats.learnGames}", color = Color.White, fontSize = 14.sp)
+                        Text(text = "Total Points: ${stats.learnPoints}", color = Color.White, fontSize = 14.sp)
+                    } else {
+                        Text(text = "PLAY MODE", color = Color.Cyan, fontSize = 10.sp, fontWeight = FontWeight.ExtraBold)
+                        Text(text = "Games: ${stats.playGames}", color = Color.White, fontSize = 14.sp)
+                        Text(text = "Total Points: ${stats.playPoints}", color = Color.White, fontSize = 14.sp)
+                    }
+                }
+            }
         }
     }
 }
@@ -83,7 +161,6 @@ fun GameBoardScreen(
     navController: NavController,
     viewModel: GameViewModel = viewModel()
 ) {
-    // Ensure initGame is only called ONCE when the screen opens.
     LaunchedEffect(playerCount, showHints) {
         viewModel.initGame(playerCount, showHints)
     }
@@ -93,7 +170,6 @@ fun GameBoardScreen(
     val config = LocalConfiguration.current
     val screenHeight = config.screenHeightDp.dp
     
-    // ADJUST SCALE: 0.22f provides a safe buffer for landscape/different aspect ratios
     val cardHeight = (screenHeight * 0.22f).coerceAtMost(180.dp) 
     val cardWidth = cardHeight * 0.65f 
 
@@ -111,24 +187,47 @@ fun GameBoardScreen(
         }
     }
 
-    // BACKGROUND AND CONTENT
-    Box(modifier = Modifier.fillMaxSize().background(Color(0xFF1B5E20))) { // Dark Green felt color
+    LaunchedEffect(gameState.winner) {
+        if (gameState.winner != null) {
+            val points = gameState.calculateMaal(1)
+            viewModel.updateStats(showHints, points)
+        }
+    }
+
+    Box(modifier = Modifier.fillMaxSize().background(Color(0xFF1B5E20))) {
         if (gameState.isInitializing) {
             LoadingScreen()
         } else {
-            // Main Game UI
-            MainGameLayout(
-                gameState = gameState,
-                cardHeight = cardHeight,
-                cardWidth = cardWidth,
-                onStockPilePositioned = { stockPilePos = it },
-                onDiscardPilePositioned = { discardPilePos = it },
-                onPlayerIconPositioned = { p, pos -> playerPositions[p] = pos },
-                onToggleShowView = { p -> selectedPlayerForShowView = p },
-                onHandPositioned = { myHandPos = it }
-            )
+            if (showHints) {
+                MainGameLayoutLearn(
+                    gameState = gameState,
+                    cardHeight = cardHeight,
+                    cardWidth = cardWidth,
+                    onStockPilePositioned = { stockPilePos = it },
+                    onDiscardPilePositioned = { discardPilePos = it },
+                    onPlayerIconPositioned = { p, pos -> playerPositions[p] = pos },
+                    onToggleShowView = { p -> selectedPlayerForShowView = p },
+                    onHandPositioned = { myHandPos = it }
+                )
+            } else {
+                MainGameLayoutPlay(
+                    gameState = gameState,
+                    cardHeight = cardHeight,
+                    cardWidth = cardWidth,
+                    onStockPilePositioned = { stockPilePos = it },
+                    onDiscardPilePositioned = { discardPilePos = it },
+                    onPlayerIconPositioned = { p, pos -> playerPositions[p] = pos },
+                    onToggleShowView = { p -> selectedPlayerForShowView = p },
+                    onHandPositioned = { myHandPos = it }
+                )
+            }
 
-            // Overlays on top of the layout
+            Box(modifier = Modifier.fillMaxSize()) {
+                Box(modifier = Modifier.align(Alignment.TopEnd)) {
+                    UserProfileIcon(showHints, viewModel)
+                }
+            }
+
             GameControls(
                 showHints = showHints,
                 onPauseClick = { viewModel.togglePauseMenu(true) },
@@ -145,7 +244,6 @@ fun GameBoardScreen(
                 onDismissShowView = { selectedPlayerForShowView = null }
             )
 
-            // THE CARDS THEMSELVES (Animation Layer)
             AnimatedCard(
                 gameState = gameState,
                 stockPilePos = stockPilePos,
@@ -173,55 +271,30 @@ fun LoadingScreen() {
 }
 
 @Composable
-fun MainGameLayout(
-    gameState: GameState,
-    cardHeight: androidx.compose.ui.unit.Dp,
-    cardWidth: androidx.compose.ui.unit.Dp,
-    onStockPilePositioned: (Offset) -> Unit,
-    onDiscardPilePositioned: (Offset) -> Unit,
-    onPlayerIconPositioned: (Int, Offset) -> Unit,
-    onToggleShowView: (Int) -> Unit,
-    onHandPositioned: (Offset) -> Unit
+fun GameControls(
+    showHints: Boolean,
+    onPauseClick: () -> Unit,
+    onHelpClick: () -> Unit
 ) {
-    Column(
-        modifier = Modifier.fillMaxSize()
-    ) {
-        // TOP SECTION: Opponents and Piles
-        Box(modifier = Modifier.weight(1.3f).fillMaxWidth()) {
-            TopAreaView(
-                gameState = gameState,
-                cardHeight = cardHeight,
-                cardWidth = cardWidth,
-                onStockPilePositioned = onStockPilePositioned,
-                onDiscardPilePositioned = onDiscardPilePositioned,
-                onPlayerIconPositioned = onPlayerIconPositioned,
-                onToggleShowView = onToggleShowView
-            )
-        }
-
-        // MIDDLE SECTION: Actions (Fixed Height)
-        Box(
+    Box(modifier = Modifier.fillMaxSize()) {
+        Text(
+            text = "⏸️",
+            fontSize = 24.sp,
             modifier = Modifier
-                .height(70.dp)
-                .fillMaxWidth(),
-            contentAlignment = Alignment.Center
-        ) {
-            ActionButtons(gameState)
-        }
+                .align(Alignment.TopStart)
+                .padding(16.dp)
+                .clickable { onPauseClick() }
+        )
 
-        // BOTTOM SECTION: Player Hand
-        Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-            PlayerHandView(
-                hand = gameState.playerHands[1] ?: emptyList(),
-                cardHeight = cardHeight,
-                cardWidth = cardWidth,
-                selectedCards = gameState.selectedCards,
-                highlightedCards = gameState.hint?.cards ?: emptyList(),
-                onCardClick = { card -> gameState.toggleCardSelection(card) },
-                isJokerSeen = gameState.hasShown[1] ?: false,
-                gameState = gameState,
-                onHandPositioned = onHandPositioned
-            )
+        if (showHints) {
+            IconButton(
+                onClick = onHelpClick,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(16.dp)
+            ) {
+                Text("?", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Color.White)
+            }
         }
     }
 }
@@ -266,35 +339,6 @@ fun ActionButtons(gameState: GameState) {
 }
 
 @Composable
-fun GameControls(
-    showHints: Boolean,
-    onPauseClick: () -> Unit,
-    onHelpClick: () -> Unit
-) {
-    Box(modifier = Modifier.fillMaxSize()) {
-        Text(
-            text = "⏸️",
-            fontSize = 24.sp,
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .padding(16.dp)
-                .clickable { onPauseClick() }
-        )
-
-        if (showHints) {
-            IconButton(
-                onClick = onHelpClick,
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(16.dp)
-            ) {
-                Text("?", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Color.White)
-            }
-        }
-    }
-}
-
-@Composable
 fun OverlayManager(
     viewModel: GameViewModel,
     gameState: GameState,
@@ -304,7 +348,6 @@ fun OverlayManager(
     cardWidth: androidx.compose.ui.unit.Dp,
     onDismissShowView: () -> Unit
 ) {
-    // Game Message Notification
     gameState.gameMessage?.let { msg ->
         Box(
             modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.3f)),
@@ -326,7 +369,6 @@ fun OverlayManager(
         }
     }
 
-    // Hint View
     if (gameState.winner == null && viewModel.hasClosedHelpOnce && !viewModel.showHelp && !viewModel.showPauseMenu) { 
         Box(modifier = Modifier.fillMaxSize()) {
             HintView(
@@ -338,7 +380,6 @@ fun OverlayManager(
         }
     }
 
-    // Basics Overlay
     if (viewModel.showHelp) {
         BasicsOverlay(
             hasShown = gameState.hasShown[1] ?: false,
@@ -346,7 +387,6 @@ fun OverlayManager(
         )
     }
 
-    // Pause Menu Overlay
     if (viewModel.showPauseMenu) {
         PauseMenuOverlay(
             onResume = { viewModel.togglePauseMenu(false) },
@@ -358,13 +398,141 @@ fun OverlayManager(
         )
     }
 
-    // Game End Overlay
     if (gameState.winner != null) {
         GameEndOverlay(gameState, navController)
     }
     
-    // Shown Cards View
     selectedPlayerForShowView?.let { player ->
         ShownCardsView(player, gameState, cardHeight, cardWidth, onDismissShowView)
+    }
+}
+
+@Composable
+fun MainGameLayoutLearn(
+    gameState: GameState,
+    cardHeight: androidx.compose.ui.unit.Dp,
+    cardWidth: androidx.compose.ui.unit.Dp,
+    onStockPilePositioned: (Offset) -> Unit,
+    onDiscardPilePositioned: (Offset) -> Unit,
+    onPlayerIconPositioned: (Int, Offset) -> Unit,
+    onToggleShowView: (Int) -> Unit,
+    onHandPositioned: (Offset) -> Unit
+) {
+    Column(modifier = Modifier.fillMaxSize()) {
+        Box(modifier = Modifier.weight(1.3f).fillMaxWidth()) {
+            TopAreaView(
+                gameState = gameState,
+                cardHeight = cardHeight,
+                cardWidth = cardWidth,
+                onStockPilePositioned = onStockPilePositioned,
+                onDiscardPilePositioned = onDiscardPilePositioned,
+                onPlayerIconPositioned = onPlayerIconPositioned,
+                onToggleShowView = onToggleShowView
+            )
+        }
+        Box(modifier = Modifier.height(70.dp).fillMaxWidth(), contentAlignment = Alignment.Center) {
+            ActionButtons(gameState)
+        }
+        Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+            PlayerHandView(
+                hand = gameState.playerHands[1] ?: emptyList(),
+                cardHeight = cardHeight,
+                cardWidth = cardWidth,
+                selectedCards = gameState.selectedCards,
+                highlightedCards = gameState.hint?.cards ?: emptyList(),
+                onCardClick = { card -> gameState.toggleCardSelection(card) },
+                isJokerSeen = gameState.hasShown[1] ?: false,
+                gameState = gameState,
+                onHandPositioned = onHandPositioned
+            )
+        }
+    }
+}
+
+@Composable
+fun MainGameLayoutPlay(
+    gameState: GameState,
+    cardHeight: androidx.compose.ui.unit.Dp,
+    cardWidth: androidx.compose.ui.unit.Dp,
+    onStockPilePositioned: (Offset) -> Unit,
+    onDiscardPilePositioned: (Offset) -> Unit,
+    onPlayerIconPositioned: (Int, Offset) -> Unit,
+    onToggleShowView: (Int) -> Unit,
+    onHandPositioned: (Offset) -> Unit
+) {
+    Box(modifier = Modifier.fillMaxSize()) {
+        val players = (2..gameState.playerCount).toList()
+        players.forEachIndexed { index, player ->
+            val alignment = when (gameState.playerCount) {
+                2 -> Alignment.TopCenter
+                3 -> if (index == 0) Alignment.TopStart else Alignment.TopEnd
+                4 -> when (index) {
+                    0 -> Alignment.TopStart
+                    1 -> Alignment.TopCenter
+                    else -> Alignment.TopEnd
+                }
+                else -> when (index) {
+                    0 -> Alignment.TopStart
+                    1 -> Alignment.TopCenter
+                    2 -> Alignment.TopEnd
+                    else -> Alignment.CenterEnd
+                }
+            }
+            Box(modifier = Modifier.align(alignment).padding(16.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    PlayerIndicator(player, gameState, onPlayerIconPositioned)
+                    if (gameState.hasShown[player] == true) {
+                        Text("👁️", modifier = Modifier.clickable { onToggleShowView(player) }.padding(4.dp))
+                    }
+                }
+            }
+        }
+
+        Column(
+            modifier = Modifier.align(Alignment.Center),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(24.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(modifier = Modifier.onGloballyPositioned { onStockPilePositioned(it.localToRoot(Offset.Zero)) }) {
+                    PileView("Stock", gameState.stockPile, false, cardHeight * 0.8f, cardWidth * 0.8f) {
+                        if (gameState.currentPlayer == 1 && gameState.currentTurnPhase == TurnPhase.DRAW) gameState.humanDrawsFromStock()
+                    }
+                }
+                
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("Maal", color = Color.White, fontSize = 12.sp)
+                    Box(modifier = Modifier.size(cardWidth * 0.7f, cardHeight * 0.7f)) {
+                        val isMaalVisible = gameState.maalCard != null
+                        if (isMaalVisible && gameState.maalCard != null) {
+                            CardView(card = gameState.maalCard, faceUp = true, modifier = Modifier.fillMaxSize())
+                        } else {
+                            Box(modifier = Modifier.fillMaxSize().background(Color.Gray.copy(alpha = 0.5f), RoundedCornerShape(4.dp)))
+                        }
+                    }
+                }
+
+                Box(modifier = Modifier.onGloballyPositioned { onDiscardPilePositioned(it.localToRoot(Offset.Zero)) }) {
+                    PileView("Discard", gameState.discardPile, true, cardHeight * 0.8f, cardWidth * 0.8f) {
+                        if (gameState.currentPlayer == 1 && gameState.currentTurnPhase == TurnPhase.DRAW) gameState.humanDrawsFromDiscard()
+                    }
+                }
+            }
+            ActionButtons(gameState)
+        }
+
+        Box(modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(cardHeight + 60.dp)) {
+            PlayerHandView(
+                hand = gameState.playerHands[1] ?: emptyList(),
+                cardHeight = cardHeight,
+                cardWidth = cardWidth,
+                selectedCards = gameState.selectedCards,
+                highlightedCards = emptyList(),
+                onCardClick = { card -> gameState.toggleCardSelection(card) },
+                isJokerSeen = gameState.hasShown[1] ?: false,
+                gameState = gameState,
+                onHandPositioned = onHandPositioned
+            )
+        }
     }
 }

@@ -76,7 +76,7 @@ fun TopAreaView(
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text("Maal", style = MaterialTheme.typography.titleSmall, fontSize = 14.sp)
                 Box(modifier = Modifier.height(cardHeight * 0.75f).width(cardWidth * 0.75f), contentAlignment = Alignment.Center) {
-                    val isMaalVisible = gameState.hasShown[1] == true && (gameState.playerHands[1]?.size ?: 0) <= 12
+                    val isMaalVisible = gameState.hasShown[1] == true && gameState.maalCard != null
                     if (isMaalVisible && gameState.maalCard != null) {
                         CardView(card = gameState.maalCard, faceUp = true, modifier = Modifier.fillMaxSize())
                     } else {
@@ -146,7 +146,6 @@ fun HintView(hint: Hint?, modifier: Modifier = Modifier) {
         elevation = CardDefaults.cardElevation(4.dp),
         colors = CardDefaults.cardColors(containerColor = Color.Black.copy(alpha = 0.7f))
     ) {
-        // Fixed "padd" to "Modifier.padding"
         Column(modifier = Modifier.padding(14.dp)) {
             Text(text = "Hint: ${hint.title}", fontWeight = FontWeight.Bold, color = Color.White, fontSize = 24.sp)
             Spacer(modifier = Modifier.height(6.dp))
