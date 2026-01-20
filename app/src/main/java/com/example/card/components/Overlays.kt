@@ -108,7 +108,7 @@ fun BasicsOverlay(hasShown: Boolean, onDismiss: () -> Unit) {
                 Text("1. Objective", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(16.dp))
                 Text(
-                    "Form valid combination of 3 cards(Melds) with your cards. The ultimate goal is to form 7 melds.",
+                    "Form valid combination of 3 cards(Melds) with your cards. The ultimate goal is to form 7 melds or 8 pairs (Dubli).",
                     style = MaterialTheme.typography.bodyLarge
                 )
             }
@@ -143,7 +143,21 @@ fun BasicsOverlay(hasShown: Boolean, onDismiss: () -> Unit) {
 
         list.add {
             Column {
-                Text("4. Special First Turn Show", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Text("4. Dubli (Alternative Strategy)", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    "Dubli is a rare but powerful way to play. Instead of forming melds, you form pairs of the exact same card (same rank and same suit).\n\n" +
+                    "- To Show: You need 7 pairs (14 cards total).\n" +
+                    "- To Win: You need 8 pairs (16 cards total).\n" +
+                    "- Joker Rules: In Dubli, printed Jokers can only pair with another printed Joker. Maal-based jokers act as their base card for pairing.",
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            }
+        }
+
+        list.add {
+            Column {
+                Text("5. Special First Turn Show", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(16.dp))
                 Text(
                     "If you have 3 Jokers or 3 identical cards (same rank AND same suit) on your very first turn, you can SHOW them immediately for a bonus:\n" +
@@ -155,10 +169,10 @@ fun BasicsOverlay(hasShown: Boolean, onDismiss: () -> Unit) {
 
         list.add {
             Column {
-                Text("5. Standard Showing", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Text("6. Standard Showing", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(16.dp))
                 Text(
-                    "Once you have at least 3 valid melds, you can press SHOW whenever you have 21 or 22 cards in your hand. You don't need to draw a card first if you already have the melds. This reveals the Maal (Special Joker) and earns you points.",
+                    "Once you have at least 3 valid melds (or 7 pairs for Dubli), you can press SHOW whenever you have 21 or 22 cards in your hand. This reveals the Maal (Special Joker) and earns you points.",
                     style = MaterialTheme.typography.bodyLarge
                 )
             }
@@ -166,7 +180,7 @@ fun BasicsOverlay(hasShown: Boolean, onDismiss: () -> Unit) {
 
         list.add {
             Column {
-                Text("6. Viewing Shown Cards", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Text("7. Viewing Shown Cards", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(16.dp))
                 Text(
                     "When a player has shown their melds, you can view them by clicking the EYE (👁️) icon next to their names. This helps you track which cards are no longer in play.",
@@ -177,7 +191,7 @@ fun BasicsOverlay(hasShown: Boolean, onDismiss: () -> Unit) {
 
         list.add {
             Column {
-                Text("7. The Maal (Special Joker)", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Text("8. The Maal (Special Joker)", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(16.dp))
                 Text(
                     "When someone shows, a card is picked as the Maal. That card, and cards related to it, become Jokers:\n" +
@@ -192,7 +206,7 @@ fun BasicsOverlay(hasShown: Boolean, onDismiss: () -> Unit) {
 
         list.add {
             Column {
-                Text("8. Maal Calculation (Points)", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Text("9. Maal Calculation (Points)", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(16.dp))
                 Text(
                     "After showing, you gain points for these cards in your hand:\n" +
@@ -207,10 +221,10 @@ fun BasicsOverlay(hasShown: Boolean, onDismiss: () -> Unit) {
 
         list.add {
             Column {
-                Text("9. Winning", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Text("10. Winning", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(16.dp))
                 Text(
-                    "Form 7 melds total to win. Your final score depends on your Maal points vs others.",
+                    "Form 7 melds total (or 8 pairs for Dubli) to win. Your final score depends on your Maal points vs others.",
                     style = MaterialTheme.typography.bodyLarge
                 )
             }
@@ -218,7 +232,7 @@ fun BasicsOverlay(hasShown: Boolean, onDismiss: () -> Unit) {
 
         list.add {
             Column {
-                Text("10. Card Highlights", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Text("11. Card Highlights", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(16.dp))
                 Text("Cards are highlighted with different colors to help you identify their state:", style = MaterialTheme.typography.bodyLarge)
                 Spacer(modifier = Modifier.height(12.dp))

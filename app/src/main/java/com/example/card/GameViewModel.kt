@@ -1,6 +1,7 @@
 package com.example.card
 
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
@@ -26,6 +27,9 @@ class GameViewModel : ViewModel() {
     var showPauseMenu by mutableStateOf(false)
     var hasClosedHelpOnce by mutableStateOf(false)
     
+    // Track which highlights have been explained
+    val explainedHighlights = mutableStateMapOf<String, Boolean>()
+
     var userStats by mutableStateOf(UserStats())
         private set
 
@@ -87,6 +91,7 @@ class GameViewModel : ViewModel() {
             gameState = newState
             showHelp = showHints
             hasClosedHelpOnce = !showHints
+            explainedHighlights.clear()
         }
     }
 
@@ -97,5 +102,9 @@ class GameViewModel : ViewModel() {
 
     fun togglePauseMenu(show: Boolean) {
         showPauseMenu = show
+    }
+
+    fun markHighlightExplained(colorKey: String) {
+        explainedHighlights[colorKey] = true
     }
 }

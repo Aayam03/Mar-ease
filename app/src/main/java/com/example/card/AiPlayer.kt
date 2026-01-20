@@ -6,33 +6,51 @@ data class DiscardDecision(val card: Card, val reason: String)
 
 object AiPlayer {
 
+    fun findDublis(hand: List<Card>): List<List<Card>> {
+        return hand.groupBy { it.rank to it.suit }
+            .map { it.value }
+            .flatMap { group ->
+                group.chunked(2).filter { it.size == 2 }
+            }
+    }
+
     /**
      * Finds all cards that are currently part of any valid meld in the hand.
-     * Takes into account whether the player has shown or not.
+     * Takes into account both Melds and Dublis to protect them.
      */
     fun findAllMeldedCards(hand: List<Card>, gameState: GameState, player: Int): List<Card> {
-        return findAllMelds(hand, gameState, player).flatten()
+        val dublis = findDublis(hand)
+        
+        // Optimization: If the player has already shown Dubli, they are committed to that path.
+        // We skip the expensive standard meld search.
+        if (gameState.isDubliShow[player] == true) {
+            return dublis.flatten()
+        }
+
+        val melds = findAllMelds(hand, gameState, player)
+        val meldedCards = melds.flatten()
+        val dubliCards = dublis.flatten()
+        
+        // Union of cards contributing to both potential systems.
+        val combined = (meldedCards + dubliCards).distinctBy { it.id }
+        
+        return combined
     }
 
     /**
      * Finds all non-overlapping melds currently in the hand.
+     * This function identifies ALL valid melds (including Joker melds) to protect them,
+     * regardless of whether the player has shown yet.
      */
     private fun findAllMelds(hand: List<Card>, gameState: GameState, player: Int): List<List<Card>> {
         val result = mutableListOf<List<Card>>()
         val temp = hand.toMutableList()
-        val hasShown = gameState.hasShown[player] == true
         
         var safety = 0
         while (safety < 8) { // Max melds possible in 21 cards
             safety++
-            val m = if (hasShown) {
-                findAnyMeldGreedy(temp, gameState, player)
-            } else {
-                // If not shown, only count melds valid for initial show
-                findSingleInitialRun(temp) ?: 
-                findSingleInitialTriple(temp) ?: 
-                findThreeJokers(temp)
-            } ?: break
+            // Always search for any valid meld to ensure protection/highlighting
+            val m = findAnyMeldGreedy(temp, gameState, player, ignoreShownStatus = true) ?: break
             
             result.add(m)
             temp.removeByReference(m)
@@ -116,6 +134,14 @@ object AiPlayer {
         val totalCards = (gameState.shownCards[player] ?: emptyList()) + hand
         if (totalCards.size !in 21..22) return false
         
+        // Dubli Win Condition: 8 pairs to win the game.
+        val dublis = findDublis(totalCards)
+        if (dublis.size >= 8) return true
+        
+        // Optimization: If they already shown Dubli, they MUST win with Dubli (8 pairs).
+        // We skip the expensive recursive meld search.
+        if (gameState.isDubliShow[player] == true) return false
+
         return when (totalCards.size) {
             22 -> findMeldsRecursive(totalCards.toMutableList(), gameState, player, 0, canDiscard = true, 0)
             21 -> findMeldsRecursive(totalCards.toMutableList(), gameState, player, 0, canDiscard = false, 0)
@@ -170,15 +196,15 @@ object AiPlayer {
         return false
     }
 
-    fun isValidGeneralMeld(cards: List<Card>, gameState: GameState, player: Int): Boolean {
+    fun isValidGeneralMeld(cards: List<Card>, gameState: GameState, player: Int, ignoreShownStatus: Boolean = false): Boolean {
         // A meld is either 3 cards, or 2 Jokers (special pair)
         if (cards.size != 3 && cards.size != 2) return false
 
-        val hasShown = gameState.hasShown[player] == true
+        val hasShown = gameState.hasShown[player] == true || ignoreShownStatus
         val jokers = cards.filter { gameState.isJoker(it, player) }
         val nonJokers = cards.filter { !gameState.isJoker(it, player) }
 
-        // Rule 1: Only use Joker after 'show'
+        // Rule 1: Only use Joker after 'show' (unless ignoreShownStatus is true for AI protection logic)
         if (jokers.isNotEmpty() && !hasShown) return false
 
         // Special case: 2 Jokers (treated as a meld only after show)
@@ -188,7 +214,7 @@ object AiPlayer {
 
         // If there are jokers in a 3-card meld
         if (jokers.isNotEmpty()) {
-            // Case A: 3 Jokers is always valid (if shown)
+            // Case A: 3 Jokers is always valid
             if (nonJokers.isEmpty()) return true
 
             // Case B: Joker for a Triple (Same Rank, Different Suits)
@@ -231,7 +257,7 @@ object AiPlayer {
             }
         }
 
-        // 2. Identical Triple check: same rank and same suit (Allowed without jokers)
+        // 2. Identical Triple check: same rank and same suit
         if (cards.all { it.rank == first.rank && it.suit == first.suit }) return true
 
         // 3. Standard Triple check: same rank, all 3 suits different
@@ -246,6 +272,26 @@ object AiPlayer {
     fun calculateCardPotential(card: Card, hand: List<Card>, gameState: GameState, player: Int): Int {
         if (gameState.isJoker(card, player)) return 1000
 
+        if (GameEngine.isMaal(card, gameState.maalCard)) {
+            return 800
+        }
+
+        val hasShown = gameState.hasShown[player] == true
+        
+        // Check potential for BOTH strategies
+        val meldScore = calculateMeldPotential(card, hand, gameState, player)
+        val dubliScore = if (isPartOfIdenticalMatch(card, hand, gameState, player)) 500 else 0
+        
+        // If already shown as Dubli, prioritize Dubli logic
+        if (gameState.isDubliShow[player] == true) {
+            return dubliScore
+        }
+        
+        // Otherwise, the card's potential is the BEST it can offer to EITHER system.
+        return maxOf(meldScore, dubliScore)
+    }
+
+    private fun calculateMeldPotential(card: Card, hand: List<Card>, gameState: GameState, player: Int): Int {
         val hasShown = gameState.hasShown[player] == true
 
         // 1. Regular/Consecutive Run
@@ -312,9 +358,15 @@ object AiPlayer {
     }
 
     fun isPartOfIdenticalMatch(card: Card, hand: List<Card>, gameState: GameState, player: Int): Boolean {
-        if (gameState.isJoker(card, player)) return false
-        val others = hand.filter { !it.isSameInstance(card) && !gameState.isJoker(it, player) }
-        return others.any { it.rank == card.rank && it.suit == card.suit }
+        // Standard Joker (printed) can only match another standard Joker.
+        if (card.rank == Rank.JOKER) {
+            val others = hand.filter { !it.isSameInstance(card) && it.rank == Rank.JOKER }
+            return others.isNotEmpty()
+        }
+        
+        // Identical match is same rank and same suit.
+        val others = hand.filter { !it.isSameInstance(card) && it.rank == card.rank && it.suit == card.suit }
+        return others.isNotEmpty()
     }
 
     fun isPartOfPair(card: Card, hand: List<Card>, gameState: GameState, player: Int): Boolean {
@@ -331,6 +383,10 @@ object AiPlayer {
 
         val scores = nonJokers.map { card ->
             if (meldedCards.any { it.isSameInstance(card) }) return@map card to 10000 
+            
+            // Protect cards with Maal points from being discarded easily
+            val maalPoints = GameEngine.getMaalPoints(card, gameState.maalCard)
+            if (maalPoints > 0) return@map card to (9000 + maalPoints)
 
             var score = calculateCardPotential(card, hand, gameState, player)
             if (card.rank == Rank.ACE || card.rank == Rank.KING) score -= 1
@@ -345,7 +401,7 @@ object AiPlayer {
     fun findCardToDiscard(hand: List<Card>, gameState: GameState, player: Int): DiscardDecision {
         val bestCard = findBestDiscardOptions(hand, gameState, player).first()
         
-        if (gameState.isJoker(bestCard, player)) {
+        if (gameState.isJoker(bestCard, player) && gameState.isDubliShow[player] != true) {
             return DiscardDecision(bestCard, "Error: AI tried to discard a Joker.")
         }
         
@@ -365,7 +421,12 @@ object AiPlayer {
         return DiscardDecision(bestCard, reason)
     }
     fun shouldTakeCard(hand: List<Card>, cardToConsider: Card, gameState: GameState, player: Int): Boolean {
+        // AI considers taking a card if it helps EITHER system.
+        if (isPartOfIdenticalMatch(cardToConsider, hand, gameState, player)) return true
+
         if (gameState.isJoker(cardToConsider, player)) return true
+        
+        if (GameEngine.getMaalPoints(cardToConsider, gameState.maalCard) > 0) return true
 
         val existingMelds = findAllMelds(hand, gameState, player)
         // Identify cards already "locked" in runs
@@ -417,6 +478,8 @@ object AiPlayer {
 
         // 3. Show Strategy
         if (gameState.hasShown[player] != true) {
+            if (findDublis(hand + cardToConsider).size > findDublis(hand).size) return true
+            
             val before = findAllInitialMelds(hand).size
             val after = findAllInitialMelds(hand + cardToConsider).size
             if (after > before) return true
@@ -426,10 +489,12 @@ object AiPlayer {
     }
     /**
      * Determines if the player can perform an initial 'show' to view Maal.
-     * Criteria: Must have 3 valid initial melds.
-     * Hand status: Must have 12 cards remaining after setting aside 9 cards (3 melds).
+     * Criteria: Must have 3 valid initial melds OR 7 pairs for Dubli.
      */
     fun canShowInitial(hand: List<Card>): Boolean {
+        val dublis = findDublis(hand)
+        if (dublis.size >= 7) return true
+
         val melds = findAllInitialMelds(hand)
         if (melds.size >= 3) {
             val totalMeldedCards = melds.sumOf { it.size }
@@ -439,8 +504,8 @@ object AiPlayer {
         return false
     }
 
-    private fun findAnyMeldGreedy(cards: List<Card>, gameState: GameState, player: Int): List<Card>? {
-        val hasShown = gameState.hasShown[player] == true
+    private fun findAnyMeldGreedy(cards: List<Card>, gameState: GameState, player: Int, ignoreShownStatus: Boolean = false): List<Card>? {
+        val hasShown = gameState.hasShown[player] == true || ignoreShownStatus
         if (cards.size < 3) {
             val jokers = cards.filter { gameState.isJoker(it, player) }
             if (jokers.size >= 2 && hasShown) return jokers.take(2)
@@ -454,7 +519,7 @@ object AiPlayer {
             for (j in i + 1 until cards.size - 1) {
                 for (k in j + 1 until cards.size) {
                     val combo = listOf(cards[i], cards[j], cards[k])
-                    if (isValidGeneralMeld(combo, gameState, player)) return combo
+                    if (isValidGeneralMeld(combo, gameState, player, ignoreShownStatus)) return combo
                 }
             }
         }

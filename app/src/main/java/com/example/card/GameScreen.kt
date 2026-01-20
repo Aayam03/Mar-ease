@@ -186,6 +186,46 @@ fun GameBoardScreen(
         }
     }
 
+    // Explaining Highlights in Learn Mode
+    if (showHints) {
+        val lastDrawn = gameState.lastDrawnCard
+        val hasMelds = gameState.meldedCards.isNotEmpty()
+        val hasSelection = gameState.selectedCards.isNotEmpty()
+        val hasHints = gameState.hint?.cards?.isNotEmpty() == true
+        val hasJokers = gameState.hasShown[1] == true && (gameState.playerHands[1]?.any { gameState.isJoker(it, 1) } == true)
+
+        LaunchedEffect(lastDrawn) {
+            if (lastDrawn != null && viewModel.explainedHighlights["yellow"] != true) {
+                gameState.showGameMessage("Yellow Highlight: Indicates the card you just drew.")
+                viewModel.markHighlightExplained("yellow")
+            }
+        }
+        LaunchedEffect(hasMelds) {
+            if (hasMelds && viewModel.explainedHighlights["green"] != true) {
+                gameState.showGameMessage("Green Highlight: Identifies cards that are part of a valid sequence or set.")
+                viewModel.markHighlightExplained("green")
+            }
+        }
+        LaunchedEffect(hasSelection) {
+            if (hasSelection && viewModel.explainedHighlights["pink"] != true) {
+                gameState.showGameMessage("Pink Highlight: Shows the cards you've currently selected.")
+                viewModel.markHighlightExplained("pink")
+            }
+        }
+        LaunchedEffect(hasHints) {
+            if (hasHints && viewModel.explainedHighlights["red"] != true) {
+                gameState.showGameMessage("Red Highlight: Points to cards suggested by the hint.")
+                viewModel.markHighlightExplained("red")
+            }
+        }
+        LaunchedEffect(hasJokers) {
+            if (hasJokers && viewModel.explainedHighlights["cyan"] != true) {
+                gameState.showGameMessage("Cyan Highlight: Marks cards that have become Jokers after Maal revelation.")
+                viewModel.markHighlightExplained("cyan")
+            }
+        }
+    }
+
     LaunchedEffect(gameState.winner) {
         if (gameState.winner != null) {
             val finalPointsDiff = GameEngine.getFinalScoreDifference(
@@ -196,10 +236,6 @@ fun GameBoardScreen(
                 gameState.hasShown, 
                 gameState.maalCard
             )
-            // Note: finalPointsDiff is "Adjustment". 
-            // Negative adjustment means human GAINED points relative to others.
-            // Positive adjustment means human LOST points.
-            // To save as "Score", we save the negative of the adjustment.
             viewModel.updateStats(showHints, -finalPointsDiff)
         }
     }

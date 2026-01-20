@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "162300451328",
+    "project_id": "mar-ease",
+    "storage_bucket": "mar-ease.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:162300451328:android:062258526aa2b60c16d6e5",
+        "android_client_info": {
+          "package_name": "com.example.card"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "162300451328-0mq17aonosheo2vvsughiun7cmiq221s.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.card",
+            "certificate_hash": "431db530b7616e0835d893d8345681df51383119"
+          }
+        },
+        {
+          "client_id": "162300451328-37k4e76fggmqvi28bka6et9eh282g572.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyApn5BvdzVgT5i_hNBcT3sxDbW01XVhXVE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "162300451328-37k4e76fggmqvi28bka6et9eh282g572.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
