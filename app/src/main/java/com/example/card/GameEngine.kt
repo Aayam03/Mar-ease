@@ -251,20 +251,6 @@ object GameEngine {
         return GameResult(winner, playerResults)
     }
 
-    fun getFinalScoreDifference(
-        winner: Int,
-        playerCount: Int,
-        playerHands: Map<Int, List<Card>>,
-        shownCards: Map<Int, List<Card>>,
-        hasShown: Map<Int, Boolean>,
-        maalCard: Card?,
-        isDubliShow: Map<Int, Boolean> = emptyMap(),
-        firstTurnBonuses: Map<Int, Int> = emptyMap(),
-        dealtTunnelas: Map<Int, Int> = emptyMap()
-    ): Int {
-        return getGameResult(winner, playerCount, playerHands, shownCards, hasShown, maalCard, isDubliShow, firstTurnBonuses, dealtTunnelas).playerResults[0].adjustment
-    }
-
     fun getFinalScoreReason(
         winner: Int,
         playerCount: Int,
@@ -278,25 +264,12 @@ object GameEngine {
     ): String {
         val result = getGameResult(winner, playerCount, playerHands, shownCards, hasShown, maalCard, isDubliShow, firstTurnBonuses, dealtTunnelas)
         val finalDiff = result.playerResults[0].adjustment
-        fun getFinalScoreReason(
-            winner: Int,
-            playerCount: Int,
-            playerHands: Map<Int, List<Card>>,
-            shownCards: Map<Int, List<Card>>,
-            hasShown: Map<Int, Boolean>,
-            maalCard: Card?,
-            isDubliShow: Map<Int, Boolean> = emptyMap(),
-            firstTurnBonuses: Map<Int, Int> = emptyMap(),
-            dealtTunnelas: Map<Int, Int> = emptyMap()
-        ): String {
-            val result = getGameResult(winner, playerCount, playerHands, shownCards, hasShown, maalCard, isDubliShow, firstTurnBonuses, dealtTunnelas)
-            val finalDiff = result.playerResults[0].adjustment
 
-            val status = if (finalDiff > 0) "Lose" else "Gain"
-            val maalsText = result.playerResults.joinToString(", ") {
-                "P${it.player}: ${it.totalMaal}${if (it.isDubli) "(D)" else ""}"
-            }
-
-            return "Winner: Player $winner${if (isDubliShow[winner] == true) " (Dubli)" else ""}. Maal Points: $maalsText.\nFinal Adjustment: $finalDiff. You $status ${abs(finalDiff)} points."
+        val status = if (finalDiff > 0) "Lose" else "Gain"
+        val maalsText = result.playerResults.joinToString(", ") {
+            "P${it.player}: ${it.totalMaal}${if (it.isDubli) "(D)" else ""}"
         }
+
+        return "Winner: Player $winner${if (isDubliShow[winner] == true) " (Dubli)" else ""}. Maal Points: $maalsText.\nFinal Adjustment: $finalDiff. You $status ${abs(finalDiff)} points."
     }
+} // End of GameEngine object
