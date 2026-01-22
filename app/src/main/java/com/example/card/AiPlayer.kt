@@ -22,7 +22,7 @@ object AiPlayer {
         val dublis = findDublis(hand)
         
         // Optimization: If the player has already shown Dubli, they are committed to that path.
-        // We skip the expensive standard meld search.
+        // We skip the expensive standard meld search to save CPU.
         if (gameState.isDubliShow[player] == true) {
             return dublis.flatten()
         }
@@ -504,33 +504,50 @@ object AiPlayer {
         return false
     }
 
-    private fun findAnyMeldGreedy(cards: List<Card>, gameState: GameState, player: Int, ignoreShownStatus: Boolean = false): List<Card>? {
-        val hasShown = gameState.hasShown[player] == true || ignoreShownStatus
-        if (cards.size < 3) {
-            val jokers = cards.filter { gameState.isJoker(it, player) }
-            if (jokers.size >= 2 && hasShown) return jokers.take(2)
-            return null
-        }
-        
-        val jokers = cards.filter { gameState.isJoker(it, player) }
-        if (jokers.size >= 2 && hasShown) return jokers.take(2)
+    /**
+     * Finds the first valid meld it can find in the given list of cards.
+     * This is a greedy approach used to identify protected cards.
+     */
+    private fun findAnyMeldGreedy(
+        cards: List<Card>,
+        gameState: GameState,
+        player: Int,
+        ignoreShownStatus: Boolean
+    ): List<Card>? {
+        if (cards.size < 2) return null
 
-        for (i in 0 until cards.size - 2) {
-            for (j in i + 1 until cards.size - 1) {
+        // 1. Check for 2-Joker meld (only valid if shown or ignoring status)
+        val jokers = cards.filter { gameState.isJoker(it, player) }
+        if (jokers.size >= 2 && (gameState.hasShown[player] == true || ignoreShownStatus)) {
+            return jokers.take(2)
+        }
+
+        if (cards.size < 3) return null
+
+        // 2. Check for 3-card melds
+        // We iterate through combinations to find any valid meld
+        for (i in cards.indices) {
+            for (j in i + 1 until cards.size) {
                 for (k in j + 1 until cards.size) {
-                    val combo = listOf(cards[i], cards[j], cards[k])
-                    if (isValidGeneralMeld(combo, gameState, player, ignoreShownStatus)) return combo
+                    val candidate = listOf(cards[i], cards[j], cards[k])
+                    if (isValidGeneralMeld(candidate, gameState, player, ignoreShownStatus)) {
+                        return candidate
+                    }
                 }
             }
         }
         return null
     }
 
-    fun MutableList<Card>.removeByReference(cardsToRemove: List<Card>) {
-        cardsToRemove.forEach { cardToRemove ->
+    /**
+     * Extension function to remove specific card instances from a list.
+     * Essential to distinguish between two identical cards (e.g., two Ace of Hearts).
+     */
+    private fun MutableList<Card>.removeByReference(toRemove: List<Card>) {
+        for (card in toRemove) {
             val iterator = this.iterator()
             while (iterator.hasNext()) {
-                if (iterator.next() === cardToRemove) {
+                if (iterator.next().isSameInstance(card)) {
                     iterator.remove()
                     break
                 }
