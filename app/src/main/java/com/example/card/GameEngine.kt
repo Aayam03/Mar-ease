@@ -24,29 +24,49 @@ data class GameResult(
 
 object GameEngine {
 
+    /**
+     * Identifies if a card is a "Maal" (point card/wildcard type).
+     * In the standard 21-card variant, there are 12 types of derived point cards:
+     * Tiplu (Maal rank in 4 suits), Poplu (+1 rank in 4 suits), Jhiplu (-1 rank in 4 suits).
+     */
     fun isMaal(card: Card, maalCard: Card?): Boolean {
-        val m = maalCard ?: return false
         if (card.rank == Rank.JOKER) return true
-        if (card.rank == m.rank) return true
-        if (card.suit == m.suit && (abs(card.rank.value - m.rank.value) == 1 || 
-            (m.rank == Rank.ACE && card.rank == Rank.TWO) || 
-            (m.rank == Rank.TWO && card.rank == Rank.ACE))) return true
-        return false
+        val m = maalCard ?: return false
+        
+        val v1 = card.rank.value
+        val v2 = m.rank.value
+        
+        // Rule: Tiplu (Same rank), Poplu (Rank + 1), Jhiplu (Rank - 1) in ALL 4 suits are point/wild cards.
+        val isTiplu = v1 == v2
+        val isPoplu = v1 == v2 + 1 || (m.rank == Rank.KING && card.rank == Rank.ACE) || (m.rank == Rank.ACE && card.rank == Rank.TWO)
+        val isJhiplu = v1 == v2 - 1 || (m.rank == Rank.TWO && card.rank == Rank.ACE) || (m.rank == Rank.ACE && card.rank == Rank.KING)
+        
+        return isTiplu || isPoplu || isJhiplu
     }
 
     fun getMaalPoints(card: Card, maalCard: Card?): Int {
         val m = maalCard ?: return 0
+        if (card.rank == Rank.JOKER) return 5
+        
+        val v1 = card.rank.value
+        val v2 = m.rank.value
+        
+        val isTiplu = v1 == v2
+        val isPoplu = v1 == v2 + 1 || (m.rank == Rank.KING && card.rank == Rank.ACE) || (m.rank == Rank.ACE && card.rank == Rank.TWO)
+        val isJhiplu = v1 == v2 - 1 || (m.rank == Rank.TWO && card.rank == Rank.ACE) || (m.rank == Rank.ACE && card.rank == Rank.KING)
+        
+        val sameColor = (m.suit == Suit.HEARTS || m.suit == Suit.DIAMONDS) == 
+                        (card.suit == Suit.HEARTS || card.suit == Suit.DIAMONDS)
+
         return when {
-            card.rank == Rank.JOKER -> 5
-            card.rank == m.rank && card.suit == m.suit -> 3
-            card.rank == m.rank -> {
-                val sameColor = (m.suit == Suit.HEARTS || m.suit == Suit.DIAMONDS) == 
-                                (card.suit == Suit.HEARTS || card.suit == Suit.DIAMONDS)
-                if (sameColor) 5 else 0
-            }
-            card.suit == m.suit && (abs(card.rank.value - m.rank.value) == 1 || 
-                                   (m.rank == Rank.ACE && card.rank == Rank.TWO) || 
-                                   (m.rank == Rank.TWO && card.rank == Rank.ACE)) -> 2
+            // Tiplu (Main Maal)
+            isTiplu && card.suit == m.suit -> 3
+            // Alter Tiplu (Same Rank, Same Color)
+            isTiplu && sameColor -> 5
+            // Poplu/Jhiplu (Same Suit)
+            (isPoplu || isJhiplu) && card.suit == m.suit -> 2
+            // Alter Poplu/Jhiplu (Same Color) - In some variations these also give points
+            (isPoplu || isJhiplu) && sameColor -> 2
             else -> 0
         }
     }
@@ -54,22 +74,7 @@ object GameEngine {
     fun isJoker(card: Card, player: Int, hasShown: Map<Int, Boolean>, maalCard: Card?): Boolean {
         if (card.rank == Rank.JOKER) return true
         if (hasShown[player] != true || maalCard == null) return false
-        
-        // Rule 1: Same rank as Maal Card
-        if (card.rank == maalCard.rank) return true
-        
-        // Rule 2: Same suit (symbol), rank above or below Maal Card
-        if (card.suit == maalCard.suit) {
-            val v1 = card.rank.value
-            val v2 = maalCard.rank.value
-            // Standard neighbor
-            if (abs(v1 - v2) == 1) return true
-            // Ace-King neighbor logic (Ace is 14, King is 13, Two is 2)
-            if (maalCard.rank == Rank.ACE && card.rank == Rank.TWO) return true
-            if (maalCard.rank == Rank.TWO && card.rank == Rank.ACE) return true
-        }
-        
-        return false
+        return isMaal(card, maalCard)
     }
 
     /**
@@ -92,7 +97,7 @@ object GameEngine {
         
         // 1. Starting Bonus (Tunnelas, Special Show, etc.)
         if (startingBonus > 0) {
-            breakdown.add(MaalBreakdown(null, startingBonus, "Starting Bonus (Tunnelas/Special)"))
+            breakdown.add(MaalBreakdown(null, startingBonus, "Starting Bonus (Tunnelas)"))
         }
 
         val usedCards = mutableListOf<Card>()
@@ -100,11 +105,9 @@ object GameEngine {
         // 2. Marriage Detection (Tiplu, Poplu, Jhiplu of same suit)
         val suitMatch = hand.filter { it.suit == m.suit }
         val tiplus = suitMatch.filter { it.rank == m.rank }
-        // Poplu logic with Ace-King boundary
         val poplus = suitMatch.filter { 
             it.rank.value == m.rank.value + 1 || (m.rank == Rank.KING && it.rank == Rank.ACE) || (m.rank == Rank.ACE && it.rank == Rank.TWO)
         }
-        // Jhiplu logic with Ace-King boundary
         val jhiplus = suitMatch.filter { 
             it.rank.value == m.rank.value - 1 || (m.rank == Rank.TWO && it.rank == Rank.ACE) || (m.rank == Rank.ACE && it.rank == Rank.KING)
         }
@@ -149,16 +152,15 @@ object GameEngine {
                 
                 val label = when (count) {
                     1 -> "Standard"
-                    2 -> "Double (Same Card)"
-                    3 -> "Triple (Same Card)"
+                    2 -> "Double"
+                    3 -> "Triple"
                     else -> "Multiple"
                 }
                 
                 val reason = when {
                     card.rank == Rank.JOKER -> "Joker ($label)"
-                    card == m -> "Maal Card ($label)"
-                    card.rank == m.rank -> "Same Rank ($label)"
-                    else -> "Maal Neighbor ($label)"
+                    card.rank == m.rank -> "Tiplu/Alter-Tiplu ($label)"
+                    else -> "Poplu/Jhiplu ($label)"
                 }
                 
                 breakdown.add(MaalBreakdown(card, totalPoints, reason))
