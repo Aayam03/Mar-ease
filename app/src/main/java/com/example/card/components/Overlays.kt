@@ -328,7 +328,7 @@ fun BasicsOverlay(hasShown: Boolean, onDismiss: () -> Unit) {
 @Composable
 fun GameEndOverlay(gameState: GameState, navController: NavController) {
     val breakdown = GameEngine.getDetailedMaalBreakdown(1, gameState.playerHands, gameState.shownCards, gameState.hasShown, gameState.maalCard)
-    val totalBonus = gameState.bonusMaalPoints[1] ?: 0
+    val totalBonus = gameState.startingBonuses[1] ?: 0
     val totalMaal = gameState.calculateMaal(1)
     
     Box(

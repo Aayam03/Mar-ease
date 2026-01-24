@@ -102,13 +102,8 @@ object AiPlayer {
             available.removeByReference(triple)
         }
 
-        if (result.size < 3) {
-            val jokers = findThreeJokers(available)
-            if (jokers != null) {
-                result.add(jokers)
-                available.removeByReference(jokers)
-            }
-        }
+        // Removed the findThreeJokers fallback for initial melds (Show), 
+        // as Jokers cannot be used to form melds for "Show".
 
         return if (result.size >= 3) result.take(3) else emptyList()
     }
@@ -312,7 +307,10 @@ object AiPlayer {
 
         if (cards.all { it.rank == c1.rank && it.suit == c1.suit }) return true
 
-        if (cards.all { it.rank == c1.rank } && cards.distinctBy { it.suit }.size == 3) return true
+        // Modified: Triples of different suits but same rank are only valid AFTER show (they can't be used for initial show)
+        if (cards.all { it.rank == c1.rank } && cards.distinctBy { it.suit }.size == 3) {
+            return hasShown
+        }
 
         return false
     }
@@ -351,13 +349,8 @@ object AiPlayer {
         val hasShown = gameState.hasShown[player] == true
 
         val hasConsecutiveRun = isPartOfConsecutiveRun(card, hand, gameState, player)
-        if (hasConsecutiveRun) return 150 // Increased to avoid discarding
-
         val hasIdenticalTriple = isPartOfIdenticalMatch(card, hand)
-        if (hasIdenticalTriple) return 120 // Increased
-
         val hasGapRun = isPartOfGapRun(card, hand, gameState, player)
-        if (hasGapRun) return 100 // Added explicit check here
 
         val sameRankOthers = hand.filter {
             !it.isSameInstance(card) &&
@@ -378,7 +371,12 @@ object AiPlayer {
             0
         }
 
-        return maxOf(if (hasGapRun) 100 else 0, triplePotential)
+        var score = 0
+        if (hasConsecutiveRun) score += 150
+        if (hasIdenticalTriple) score += 100
+        if (hasGapRun) score += 120
+        
+        return maxOf(score, triplePotential)
     }
 
 
