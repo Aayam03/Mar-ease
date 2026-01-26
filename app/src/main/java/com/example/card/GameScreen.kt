@@ -224,6 +224,19 @@ fun GameBoardScreen(
                 viewModel.markHighlightExplained("cyan")
             }
         }
+
+        // Contextual Dubli Strategy Hint
+        val myHand = gameState.playerHands[1]?.toList() ?: emptyList()
+        LaunchedEffect(myHand, gameState.currentTurnPhase) {
+            if (!viewModel.explainedDubliStrategy && 
+                gameState.currentTurnPhase == TurnPhase.PLAY_OR_DISCARD &&
+                AiPlayer.isAimingForDubli(1, myHand, gameState)) {
+                
+                delay(1000)
+                viewModel.markDubliStrategyExplained()
+                viewModel.showDubliOverlay = true
+            }
+        }
     }
 
     LaunchedEffect(gameState.winner) {
@@ -415,7 +428,7 @@ fun OverlayManager(
         }
     }
 
-    if (gameState.winner == null && viewModel.hasClosedHelpOnce && !viewModel.showHelp && !viewModel.showPauseMenu) { 
+    if (gameState.winner == null && viewModel.hasClosedHelpOnce && !viewModel.showHelp && !viewModel.showPauseMenu && !viewModel.showDubliOverlay) { 
         Box(modifier = Modifier.fillMaxSize()) {
             HintView(
                 hint = gameState.hint, 
@@ -431,6 +444,10 @@ fun OverlayManager(
             hasShown = gameState.hasShown[1] ?: false,
             onDismiss = { viewModel.toggleHelp(false) }
         )
+    }
+
+    if (viewModel.showDubliOverlay) {
+        DubliStrategyOverlay(onDismiss = { viewModel.showDubliOverlay = false })
     }
 
     if (viewModel.showPauseMenu) {

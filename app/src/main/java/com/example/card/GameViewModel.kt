@@ -29,6 +29,8 @@ class GameViewModel : ViewModel() {
     
     // Track which highlights have been explained
     val explainedHighlights = mutableStateMapOf<String, Boolean>()
+    var explainedDubliStrategy by mutableStateOf(false)
+    var showDubliOverlay by mutableStateOf(false)
 
     var userStats by mutableStateOf(UserStats())
         private set
@@ -92,6 +94,8 @@ class GameViewModel : ViewModel() {
             showHelp = showHints
             hasClosedHelpOnce = !showHints
             explainedHighlights.clear()
+            explainedDubliStrategy = false
+            showDubliOverlay = false
         }
     }
 
@@ -106,5 +110,9 @@ class GameViewModel : ViewModel() {
 
     fun markHighlightExplained(colorKey: String) {
         explainedHighlights[colorKey] = true
+    }
+
+    fun markDubliStrategyExplained() {
+        explainedDubliStrategy = true
     }
 }

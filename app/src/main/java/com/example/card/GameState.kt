@@ -549,11 +549,23 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
                 val cardFromDiscard = discardPile.lastOrNull()
                 val aiHandList = aiHand.toList()
                 
-                if (cardFromDiscard != null && withContext(Dispatchers.Default) { AiPlayer.shouldPickFromDiscard(cardFromDiscard, aiHandList, this@GameState, myPlayerId) }) {
-                    val card = discardPile.last()
-                    moveCard(card, myPlayerId, AnimationType.DRAW, AnimationSource.DISCARD) {
-                        discardPile.removeAt(discardPile.lastIndex)
-                        aiHand.add(card)
+                if (cardFromDiscard != null) {
+                    val decision = withContext(Dispatchers.Default) { AiPlayer.shouldPickFromDiscard(cardFromDiscard, aiHandList, this@GameState, myPlayerId) }
+                    if (decision.shouldPick) {
+                        val card = discardPile.last()
+                        moveCard(card, myPlayerId, AnimationType.DRAW, AnimationSource.DISCARD) {
+                            discardPile.removeAt(discardPile.lastIndex)
+                            aiHand.add(card)
+                        }
+                    } else if (stockPile.isNotEmpty()) {
+                        val card = stockPile.first()
+                        moveCard(card, myPlayerId, AnimationType.DRAW, AnimationSource.STOCK) {
+                            stockPile.removeAt(0)
+                            aiHand.add(card)
+                        }
+                    } else {
+                        advanceTurn()
+                        return@launch
                     }
                 } else if (stockPile.isNotEmpty()) {
                     val card = stockPile.first()
@@ -641,7 +653,8 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
                                         cards = possibleInitial.flatten().take(req)
                                     )
                                 } else if (dublis.size >= 4) {
-                                    hint = Hint(title = "Dubli Strategy", message = "You have ${dublis.size} Dublis. Try to collect more pairs for a Dubli show.", cards = dublis.flatten())
+                                    val decision = withContext(Dispatchers.Default) { AiPlayer.findCardToDiscard(hand, this@GameState, 1) }
+                                    hint = Hint(title = "Dubli Strategy", message = "You have ${dublis.size} Dublis. Try to collect more pairs for a Dubli show.\nSuggested Discard: ${decision.reason}", cards = listOf(decision.card))
                                 } else {
                                     val decision = withContext(Dispatchers.Default) { AiPlayer.findCardToDiscard(hand, this@GameState, 1) }
                                     hint = Hint(title = "Suggested Discard", message = decision.reason, cards = listOf(decision.card))
@@ -679,7 +692,15 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
         if (hasShown[1] == false) {
             val dublis = AiPlayer.findDublis(humanHand)
             if (dublis.size >= 4) {
-                hint = Hint(title = "Dubli Strategy", message = "You have ${dublis.size} Dublis! Consider going for a Dubli show (7 pairs needed).", cards = dublis.flatten())
+                val cardFromDiscard = discardPile.lastOrNull()
+                val discardDecision = if (cardFromDiscard != null) withContext(Dispatchers.Default) { AiPlayer.shouldPickFromDiscard(cardFromDiscard, humanHand, this@GameState, 1) } else null
+                
+                val discardHint = if (discardDecision != null && discardDecision.shouldPick) {
+                    discardDecision.reason
+                } else {
+                    "The discard pile is useless. You should draw from the stock pile."
+                }
+                hint = Hint(title = "Dubli Strategy", message = "You have ${dublis.size} Dublis! Consider going for a Dubli show (7 pairs needed).\n$discardHint", cards = if (discardDecision?.shouldPick == true) listOf(cardFromDiscard!!) else dublis.flatten())
                 return
             }
 
@@ -691,8 +712,10 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
         }
 
         val cardFromDiscard = discardPile.lastOrNull()
-        hint = if (cardFromDiscard != null && withContext(Dispatchers.Default) { AiPlayer.shouldPickFromDiscard(cardFromDiscard, humanHand, this@GameState, 1) }) {
-            Hint(title = "Draw Discard", message = "You should take the ${cardFromDiscard.rank.symbol}${cardFromDiscard.suit.symbol} from the discard pile. It forms a meld or a strong connection.", cards = listOf(cardFromDiscard))
+        val decision = if (cardFromDiscard != null) withContext(Dispatchers.Default) { AiPlayer.shouldPickFromDiscard(cardFromDiscard, humanHand, this@GameState, 1) } else null
+        
+        hint = if (decision != null && decision.shouldPick) {
+            Hint(title = "Draw Discard", message = decision.reason, cards = listOf(cardFromDiscard!!))
         } else {
             Hint(title = "Tap to Draw from Stock", message = "The discard pile is useless. You should draw from the stock pile.")
         }

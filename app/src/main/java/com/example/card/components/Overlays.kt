@@ -326,6 +326,44 @@ fun BasicsOverlay(hasShown: Boolean, onDismiss: () -> Unit) {
 }
 
 @Composable
+fun DubliStrategyOverlay(onDismiss: () -> Unit) {
+    Box(
+        modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.7f)).clickable { onDismiss() },
+        contentAlignment = Alignment.Center
+    ) {
+        Card(
+            modifier = Modifier.padding(32.dp).width(500.dp).heightIn(max = 400.dp).clickable(enabled = false) { },
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        ) {
+            Box(modifier = Modifier.fillMaxSize()) {
+                TextButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.align(Alignment.TopEnd).padding(8.dp)
+                ) {
+                    Text("CLOSE", fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, color = Color.Red)
+                }
+
+                Column(modifier = Modifier.padding(24.dp).fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                    Text("New Strategy: Aim for Dubli!", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, textAlign = TextAlign.Center)
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        "Your current hand has many identical pairs but few potential melds. This is a perfect opportunity to try the 'Dubli' strategy!\n\n" +
+                        "Instead of regular runs/sets, collect 7 pairs of identical cards to show Maal, and 8 pairs to win.",
+                        style = MaterialTheme.typography.bodyLarge,
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.height(24.dp))
+                    Button(onClick = onDismiss) {
+                        Text("I'll try it!")
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
 fun GameEndOverlay(gameState: GameState, navController: NavController) {
     val breakdown = GameEngine.getDetailedMaalBreakdown(1, gameState.playerHands, gameState.shownCards, gameState.hasShown, gameState.maalCard)
     val totalBonus = gameState.startingBonuses[1] ?: 0

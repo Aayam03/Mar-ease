@@ -140,16 +140,43 @@ fun PlayerIndicator(player: Int, gameState: GameState, onPlayerIconPositioned: (
 @Composable
 fun HintView(hint: Hint?, modifier: Modifier = Modifier) {
     if (hint == null) return
-    Card(
-        modifier = modifier.width(280.dp),
-        shape = RoundedCornerShape(8.dp),
-        elevation = CardDefaults.cardElevation(4.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.Black.copy(alpha = 0.7f))
-    ) {
-        Column(modifier = Modifier.padding(14.dp)) {
-            Text(text = "Hint: ${hint.title}", fontWeight = FontWeight.Bold, color = Color.White, fontSize = 24.sp)
-            Spacer(modifier = Modifier.height(6.dp))
-            Text(hint.message, color = Color.White, fontSize = 18.sp, lineHeight = 22.sp)
+    var isMinimized by remember { mutableStateOf(false) }
+
+    if (isMinimized) {
+        Box(
+            modifier = modifier
+                .size(40.dp)
+                .clip(RoundedCornerShape(20.dp))
+                .background(Color.Black.copy(alpha = 0.7f))
+                .clickable { isMinimized = false },
+            contentAlignment = Alignment.Center
+        ) {
+            Text("💡", fontSize = 20.sp)
+        }
+    } else {
+        Card(
+            modifier = modifier.width(280.dp),
+            shape = RoundedCornerShape(8.dp),
+            elevation = CardDefaults.cardElevation(4.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.Black.copy(alpha = 0.7f))
+        ) {
+            Column(modifier = Modifier.padding(14.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxSize(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(text = "Hint: ${hint.title}", fontWeight = FontWeight.Bold, color = Color.White, fontSize = 24.sp, modifier = Modifier.weight(1f))
+                    Text(
+                        "➖", 
+                        modifier = Modifier.clickable { isMinimized = true }.padding(4.dp),
+                        color = Color.White,
+                        fontSize = 18.sp
+                    )
+                }
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(hint.message, color = Color.White, fontSize = 18.sp, lineHeight = 22.sp)
+            }
         }
     }
 }
