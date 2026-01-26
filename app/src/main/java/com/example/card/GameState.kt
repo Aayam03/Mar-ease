@@ -265,8 +265,10 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
 
             viewModelScope.launch {
                 val handList = hand.toList()
-                val canShowRegular = withContext(Dispatchers.Default) { AiPlayer.findAllInitialMelds(handList).isNotEmpty() }
-                val canShowDubli = withContext(Dispatchers.Default) { AiPlayer.findDublis(handList).size >= 7 }
+                val alreadyShownCount = shownCards[1]?.size ?: 0
+                val reqMelds = 3 - (alreadyShownCount / 3)
+                val canShowRegular = withContext(Dispatchers.Default) { AiPlayer.findAllInitialMelds(handList).size >= reqMelds }
+                val canShowDubli = alreadyShownCount == 0 && withContext(Dispatchers.Default) { AiPlayer.findDublis(handList).size >= 7 }
                 
                 withContext(Dispatchers.Main) {
                     if (hasShown[1] == false && (canShowRegular || canShowDubli)) {
@@ -283,7 +285,8 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
                 val handList = hand.toList()
                 viewModelScope.launch {
                     val dublis = withContext(Dispatchers.Default) { AiPlayer.findDublis(handList) }
-                    if (dublis.size >= 7) {
+                    val alreadyShownCount = shownCards[player]?.size ?: 0
+                    if (alreadyShownCount == 0 && dublis.size >= 7) {
                         withContext(Dispatchers.Main) {
                             val meldedCards = dublis.take(7).flatten()
                             hand.removeByReference(meldedCards)
@@ -299,10 +302,11 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
                             }
                         }
                     } else {
+                        val reqMelds = 3 - (alreadyShownCount / 3)
                         val initialMelds = withContext(Dispatchers.Default) { AiPlayer.findAllInitialMelds(handList) }
                         withContext(Dispatchers.Main) {
-                            if (initialMelds.size >= 3) {
-                                val meldedCards = initialMelds.flatten()
+                            if (initialMelds.size >= reqMelds) {
+                                val meldedCards = initialMelds.take(reqMelds).flatten()
                                 hand.removeByReference(meldedCards)
                                 shownCards[player]?.addAll(meldedCards)
                                 hasShown[player] = true
@@ -392,12 +396,11 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
     fun humanShows() {
         if (isInitializing || currentPlayer != 1) return
         val hand = playerHands[1] ?: return
-
-        // Special Show and viewing Maal without discard is only available in the FIRST turn BEFORE drawing.
+        val alreadyShownCount = shownCards[1]?.size ?: 0
         val isFirstTurnBeforeDraw = isFirstTurn && currentTurnPhase == TurnPhase.DRAW
 
-        // Check for Dubli Show
-        if (hasShown[1] == false && selectedCards.size == 14) {
+        // Check for Dubli Show - only if nothing shown yet
+        if (hasShown[1] == false && alreadyShownCount == 0 && selectedCards.size == 14) {
             val selectedList = selectedCards.toList()
             viewModelScope.launch {
                 val dublis = withContext(Dispatchers.Default) { AiPlayer.findDublis(selectedList) }
@@ -423,10 +426,8 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
             return
         }
 
-        if (hasShown[1] == false && 
-            selectedCards.size == 3 && 
-            isFirstTurnBeforeDraw) { 
-            
+        // Tunnela (Identical Triple) Show - ONLY in first hand before draw
+        if (hasShown[1] == false && alreadyShownCount == 0 && selectedCards.size == 3 && isFirstTurnBeforeDraw) { 
             val jokers = selectedCards.filter { it.rank == Rank.JOKER }
             val identical = selectedCards.size == 3 && selectedCards.all { 
                 it.rank == selectedCards[0].rank && it.suit == selectedCards[0].suit 
@@ -444,16 +445,16 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
             }
         }
 
-        val requiredCardCount = 9
-        val requiredMeldCount = 3
+        val requiredMeldCount = 3 - (alreadyShownCount / 3)
+        val requiredCardCount = requiredMeldCount * 3
 
-        if (hasShown[1] == false && selectedCards.size == requiredCardCount) {
+        if (hasShown[1] == false && selectedCards.size == requiredCardCount && requiredMeldCount > 0) {
             val selectedList = selectedCards.toList()
             viewModelScope.launch {
                 val melds = withContext(Dispatchers.Default) { AiPlayer.findAllInitialMelds(selectedList) }
                 withContext(Dispatchers.Main) {
                     if (melds.size >= requiredMeldCount) {
-                        val meldedCards = melds.flatten()
+                        val meldedCards = melds.take(requiredMeldCount).flatten()
                         hand.removeByReference(meldedCards)
                         shownCards[1]?.addAll(meldedCards)
                         hasShown[1] = true 
@@ -476,9 +477,9 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
                 }
             }
         } else if (hasShown[1] == false) {
-            val msg = if (isFirstTurnBeforeDraw) 
-                "You can reveal a Tunnel (3 identical cards) or select 9 cards for a regular show or 14 for Dubli."
-                else "Select $requiredCardCount cards to show or 14 for Dubli."
+            val msg = if (isFirstTurnBeforeDraw && alreadyShownCount == 0)
+                "Select 9 cards (3 melds), 3 identical cards for a Tunnel, or 14 for Dubli."
+                else "Select $requiredCardCount cards (${requiredMeldCount} more melds) to complete your show."
             showGameMessage(msg)
         }
     }
@@ -605,6 +606,8 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
             return
         }
         val humanHand = playerHands[1]?.toList() ?: return
+        val alreadyShownCount = shownCards[1]?.size ?: 0
+        val isFirstTurnBeforeDraw = isFirstTurn && currentTurnPhase == TurnPhase.DRAW
         
         viewModelScope.launch {
             val mCards = withContext(Dispatchers.Default) { AiPlayer.findAllMeldedCards(humanHand, this@GameState, 1) }
@@ -612,11 +615,9 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
                 meldedCards.clear()
                 meldedCards.addAll(mCards)
 
-                val isFirstTurnBeforeDraw = isFirstTurn && currentTurnPhase == TurnPhase.DRAW
-
                 when (currentTurnPhase) {
                     TurnPhase.DRAW -> {
-                        if (isFirstTurnBeforeDraw) {
+                        if (hasShown[1] == false && alreadyShownCount == 0 && isFirstTurnBeforeDraw) {
                             val jokers = humanHand.filter { it.rank == Rank.JOKER }
                             val identical = humanHand.groupBy { it.rank to it.suit }.filter { it.value.size >= 3 }
                             if (jokers.size >= 3) {
@@ -635,24 +636,23 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
                             val hand = playerHands[1]?.toList() ?: emptyList()
                             val dublis = AiPlayer.findDublis(hand)
                             
-                            if (dublis.size >= 7) {
+                            if (alreadyShownCount == 0 && dublis.size >= 7) {
                                 hint = Hint(
                                     title = "Ready for Dubli Show",
                                     message = "Select your 14 cards (7 Dublis) and press SHOW.",
                                     cards = dublis.take(7).flatten()
                                 )
                             } else {
-                                val req = 9
+                                val reqMelds = 3 - (alreadyShownCount / 3)
                                 val possibleInitial = withContext(Dispatchers.Default) { AiPlayer.findAllInitialMelds(hand) }
-                                val reqMelds = 3
 
                                 if (possibleInitial.size >= reqMelds) {
                                     hint = Hint(
                                         title = "Ready to Show",
-                                        message = "Select your $req cards for the melds and press SHOW.",
-                                        cards = possibleInitial.flatten().take(req)
+                                        message = "Select your ${reqMelds * 3} cards for the remaining melds and press SHOW.",
+                                        cards = possibleInitial.take(reqMelds).flatten()
                                     )
-                                } else if (dublis.size >= 4) {
+                                } else if (alreadyShownCount == 0 && dublis.size >= 4) {
                                     val decision = withContext(Dispatchers.Default) { AiPlayer.findCardToDiscard(hand, this@GameState, 1) }
                                     hint = Hint(title = "Dubli Strategy", message = "You have ${dublis.size} Dublis. Try to collect more pairs for a Dubli show.\nSuggested Discard: ${decision.reason}", cards = listOf(decision.card))
                                 } else {
@@ -674,9 +674,10 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
                         if (hasShown[1] == true) {
                             hint = Hint(title = "End Turn", message = "You have already shown. Press END TURN to let others play.")
                         } else {
+                            val reqMelds = 3 - (alreadyShownCount / 3)
                             val melds = withContext(Dispatchers.Default) { AiPlayer.findAllInitialMelds(humanHand) }
-                            if (melds.isNotEmpty()) {
-                                hint = Hint(title = "Show Now?", message = "You should select your 9 melded cards and press SHOW, or End Turn if you want to wait.", cards = meldedCards.toList())
+                            if (melds.size >= reqMelds) {
+                                hint = Hint(title = "Show Now?", message = "You should select your ${reqMelds * 3} melded cards and press SHOW, or End Turn if you want to wait.", cards = melds.take(reqMelds).flatten())
                             } else {
                                 hint = Hint(title = "Strategy", message = "You should end your turn if no further melds can be formed.")
                             }
@@ -689,9 +690,10 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
     }
 
     private suspend fun updateDrawHint(humanHand: List<Card>) {
+        val alreadyShownCount = shownCards[1]?.size ?: 0
         if (hasShown[1] == false) {
             val dublis = AiPlayer.findDublis(humanHand)
-            if (dublis.size >= 4) {
+            if (alreadyShownCount == 0 && dublis.size >= 4) {
                 val cardFromDiscard = discardPile.lastOrNull()
                 val discardDecision = if (cardFromDiscard != null) withContext(Dispatchers.Default) { AiPlayer.shouldPickFromDiscard(cardFromDiscard, humanHand, this@GameState, 1) } else null
                 
@@ -704,9 +706,10 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
                 return
             }
 
+            val reqMelds = 3 - (alreadyShownCount / 3)
             val melds = withContext(Dispatchers.Default) { AiPlayer.findAllInitialMelds(humanHand) }
-            if (melds.size >= 3) {
-                hint = Hint(title = "Show Before Drawing", message = "You already have the 3 required melds! Select them and press SHOW to reveal Maal before taking a card.", cards = meldedCards.toList())
+            if (melds.size >= reqMelds) {
+                hint = Hint(title = "Show Before Drawing", message = "You already have the ${reqMelds} required melds! Select them and press SHOW to reveal Maal before taking a card.", cards = melds.take(reqMelds).flatten())
                 return
             }
         }

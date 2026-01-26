@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -155,27 +156,27 @@ fun HintView(hint: Hint?, modifier: Modifier = Modifier) {
         }
     } else {
         Card(
-            modifier = modifier.width(280.dp),
+            modifier = modifier.width(220.dp),
             shape = RoundedCornerShape(8.dp),
             elevation = CardDefaults.cardElevation(4.dp),
             colors = CardDefaults.cardColors(containerColor = Color.Black.copy(alpha = 0.7f))
         ) {
-            Column(modifier = Modifier.padding(14.dp)) {
+            Column(modifier = Modifier.padding(10.dp)) {
                 Row(
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(text = "Hint: ${hint.title}", fontWeight = FontWeight.Bold, color = Color.White, fontSize = 24.sp, modifier = Modifier.weight(1f))
+                    Text(text = "Hint: ${hint.title}", fontWeight = FontWeight.Bold, color = Color.White, fontSize = 14.sp, modifier = Modifier.weight(1f))
                     Text(
                         "➖", 
-                        modifier = Modifier.clickable { isMinimized = true }.padding(4.dp),
+                        modifier = Modifier.clickable { isMinimized = true }.padding(2.dp),
                         color = Color.White,
-                        fontSize = 18.sp
+                        fontSize = 12.sp
                     )
                 }
-                Spacer(modifier = Modifier.height(6.dp))
-                Text(hint.message, color = Color.White, fontSize = 18.sp, lineHeight = 22.sp)
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(hint.message, color = Color.White, fontSize = 12.sp, lineHeight = 16.sp)
             }
         }
     }

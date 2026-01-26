@@ -363,18 +363,18 @@ fun ActionButtons(gameState: GameState) {
     Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
         if (gameState.winner == null && gameState.currentPlayer == 1) {
             if (gameState.hasShown[1] == false && 
-                (gameState.currentTurnPhase == TurnPhase.DRAW || gameState.currentTurnPhase == TurnPhase.PLAY_OR_DISCARD || gameState.currentTurnPhase == TurnPhase.SHOW_OR_END) &&
-                (gameState.playerHands[1]?.size == 21 || gameState.playerHands[1]?.size == 22 || (gameState.isFirstTurn && gameState.currentTurnPhase == TurnPhase.DRAW))
+                (gameState.currentTurnPhase == TurnPhase.DRAW || gameState.currentTurnPhase == TurnPhase.PLAY_OR_DISCARD || gameState.currentTurnPhase == TurnPhase.SHOW_OR_END)
             ) {
-                val canShow = if (gameState.isFirstTurn && gameState.currentTurnPhase == TurnPhase.DRAW) {
-                    if (gameState.selectedCards.size == 3) {
-                        val jokers = gameState.selectedCards.filter { it.rank == Rank.JOKER }
-                        val identical = gameState.selectedCards.distinctBy { it.rank }.size == 1 &&
-                                       gameState.selectedCards.distinctBy { it.suit }.size == 1
+                val selected = gameState.selectedCards.toList()
+                val canShow = when (selected.size) {
+                    3 -> {
+                        val jokers = selected.filter { it.rank == Rank.JOKER }
+                        val identical = selected.all { it.rank == selected[0].rank && it.suit == selected[0].suit }
                         jokers.size == 3 || identical
-                    } else false
-                } else {
-                    gameState.selectedCards.size == 9 && AiPlayer.findAllInitialMelds(gameState.selectedCards.toList()).size >= 3
+                    }
+                    9 -> AiPlayer.findAllInitialMelds(selected).size >= 3
+                    14 -> AiPlayer.findDublis(selected).size >= 7
+                    else -> false
                 }
 
                 Button(onClick = { gameState.humanShows() }, enabled = canShow) {

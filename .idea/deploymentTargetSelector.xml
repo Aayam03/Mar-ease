@@ -4,10 +4,10 @@
     <selectionStates>
       <SelectionState runConfigName="Mar-ease">
         <option name="selectionMode" value="DROPDOWN" />
-        <DropdownSelection timestamp="2026-01-12T13:43:11.131239800Z">
+        <DropdownSelection timestamp="2026-01-26T10:47:35.540456900Z">
           <Target type="DEFAULT_BOOT">
             <handle>
-              <DeviceId pluginId="LocalEmulator" identifier="path=C:\Users\ASUS\.android\avd\Medium_Phone.avd" />
+              <DeviceId pluginId="PhysicalDevice" identifier="serial=guscwcjrau4taaxo" />
             </handle>
           </Target>
         </DropdownSelection>
