@@ -46,7 +46,7 @@ object GameEngine {
 
     fun getMaalPoints(card: Card, maalCard: Card?): Int {
         val m = maalCard ?: return 0
-        if (card.rank == Rank.JOKER) return 5
+        if (card.rank == Rank.JOKER) return 2 // Standard Joker value
         
         val v1 = card.rank.value
         val v2 = m.rank.value
@@ -62,11 +62,11 @@ object GameEngine {
             // Tiplu (Main Maal)
             isTiplu && card.suit == m.suit -> 3
             // Alter Tiplu (Same Rank, Same Color)
-            isTiplu && sameColor -> 5
+            isTiplu && sameColor -> 2
             // Poplu/Jhiplu (Same Suit)
             (isPoplu || isJhiplu) && card.suit == m.suit -> 2
-            // Alter Poplu/Jhiplu (Same Color) - In some variations these also give points
-            (isPoplu || isJhiplu) && sameColor -> 2
+            // Alter Poplu/Jhiplu (Same Color)
+            (isPoplu || isJhiplu) && sameColor -> 1
             else -> 0
         }
     }
@@ -127,39 +127,31 @@ object GameEngine {
         }
         
         // 3. Standard Breakdown for remaining cards
-        val counts = remainingHand.groupingBy { it }.eachCount()
+        val counts = remainingHand.groupingBy { it.rank to it.suit }.eachCount()
         
-        counts.forEach { (card, count) ->
+        counts.forEach { (rankSuit, count) ->
+            val card = remainingHand.first { it.rank == rankSuit.first && it.suit == rankSuit.second }
             val basePoints = getMaalPoints(card, m)
             
             if (basePoints > 0) {
+                // Multiplier logic for multiple identical maal cards
                 val totalPoints = when (count) {
                     1 -> basePoints
-                    2 -> when (basePoints) {
-                        2 -> 4
-                        3 -> 8
-                        5 -> 15
-                        else -> basePoints * 2
-                    }
-                    3 -> when (basePoints) {
-                        2 -> 10
-                        3 -> 15
-                        5 -> 25
-                        else -> basePoints * 3
-                    }
-                    else -> basePoints * count
+                    2 -> basePoints * 3 // Bonus for double
+                    3 -> basePoints * 5 // Large bonus for triple
+                    else -> basePoints * count * 2
                 }
                 
                 val label = when (count) {
-                    1 -> "Standard"
-                    2 -> "Double"
-                    3 -> "Triple"
+                    1 -> "Single"
+                    2 -> "Double (x3)"
+                    3 -> "Triple (x5)"
                     else -> "Multiple"
                 }
                 
                 val reason = when {
                     card.rank == Rank.JOKER -> "Joker ($label)"
-                    card.rank == m.rank -> "Tiplu/Alter-Tiplu ($label)"
+                    card.rank == m.rank -> "Tiplu ($label)"
                     else -> "Poplu/Jhiplu ($label)"
                 }
                 
@@ -172,14 +164,27 @@ object GameEngine {
 
     fun calculateMaal(
         player: Int, 
-        playerHands: Map<Int, List<Card>>, 
+        playerHands: Map<Map<Int, List<Card>>, Any?>, // Fixed signature mismatch if any
+        playerHandsMap: Map<Int, List<Card>>,
         shownCards: Map<Int, List<Card>>, 
         hasShown: Map<Int, Boolean>, 
         maalCard: Card?,
         startingBonus: Int = 0
     ): Int {
         if (hasShown[player] != true) return 0
-        return getDetailedMaalBreakdown(player, playerHands, shownCards, hasShown, maalCard, startingBonus).sumOf { it.points }
+        return getDetailedMaalBreakdown(player, playerHandsMap, shownCards, hasShown, maalCard, startingBonus).sumOf { it.points }
+    }
+    
+    // Overload for convenience
+    fun calculateMaal(
+        player: Int, 
+        playerHands: Map<Int, List<Card>>, 
+        shownCards: Map<Int, List<Card>>, 
+        hasShown: Map<Int, Boolean>, 
+        maalCard: Card?,
+        startingBonus: Int = 0
+    ): Int {
+        return calculateMaal(player, emptyMap(), playerHands, shownCards, hasShown, maalCard, startingBonus)
     }
 
     fun getGameResult(
@@ -203,15 +208,16 @@ object GameEngine {
             
             var adjustment = 0
             if (player == 1) {
-                val totalOthersMaal = maals.drop(1).sum()
+                val othersMaal = maals.drop(1)
+                val totalOthersMaal = othersMaal.sum()
                 val baseMaalDiff = totalOthersMaal - (playerCount - 1) * humanMaal
                 
                 val winnerAdjustment = if (winner == 1) {
                     var collect = 0
                     for (p in 2..playerCount) {
-                        val isDubliWinner = isDubliShow[1] == true
-                        val winBase = if (isDubliWinner) 5 else 3
-                        val loseNoShowBase = if (isDubliWinner) 15 else 10
+                        val isWinnerDubli = isDubliShow[1] == true
+                        val winBase = if (isWinnerDubli) 5 else 3
+                        val loseNoShowBase = if (isWinnerDubli) 15 else 10
                         
                         collect += if (hasShown[p] == true) winBase else loseNoShowBase
                     }
@@ -220,8 +226,8 @@ object GameEngine {
                     if (hasShown[1] == true) {
                         if (isDubliShow[1] == true) 0 else 3
                     } else {
-                        val isDubliWinner = isDubliShow[winner] == true
-                        if (isDubliWinner) 15 else 10
+                        val isWinnerDubli = isDubliShow[winner] == true
+                        if (isWinnerDubli) 15 else 10
                     }
                 }
                 adjustment = baseMaalDiff + winnerAdjustment
@@ -264,10 +270,31 @@ object GameEngine {
         startingBonuses: Map<Int, Int> = emptyMap()
     ): String {
         val result = getGameResult(winner, playerCount, playerHands, shownCards, hasShown, maalCard, isDubliShow, startingBonuses)
-        val finalDiff = result.playerResults[0].adjustment
-        val status = if (finalDiff > 0) "Lose" else "Gain"
+        val p1 = result.playerResults[0]
         val maalsText = result.playerResults.joinToString(", ") { "P${it.player}: ${it.totalMaal}${if (it.isDubli) "(D)" else ""}" }
+        
+        val humanMaal = p1.totalMaal
+        val otherMaals = result.playerResults.drop(1).map { it.totalMaal }
+        val sumOthers = otherMaals.sum()
+        val maalDiff = sumOthers - (playerCount - 1) * humanMaal
+        
+        val winBonus = p1.adjustment - maalDiff
+        val status = if (p1.adjustment > 0) "Pay" else "Collect"
+        
+        val formula = "Formula: Adjustment = [Σ(Others' Maal) - (Count × Your Maal)] + [Win/Loss Bonus]"
+        val calculation = "Calculation: [$sumOthers - (${playerCount - 1} × $humanMaal)] + [$winBonus] = ${p1.adjustment}"
+        
+        val explanation = if (winner == 1) {
+            "As the winner, you collect bonuses from others (3-10 each)."
+        } else {
+            if (p1.hasShown) "Since you showed, you only pay a small penalty (3) to the winner."
+            else "Since you didn't show, you pay a full penalty (10-15) to the winner."
+        }
 
-        return "Winner: Player $winner${if (isDubliShow[winner] == true) " (Dubli)" else ""}. Maal Points: $maalsText.\nFinal Adjustment: $finalDiff. You $status ${abs(finalDiff)} points."
+        return "Game Over! Winner: P$winner\n" +
+               "Maal Summary: $maalsText\n\n" +
+               "$formula\n" +
+               "$calculation\n\n" +
+               "Explanation: $explanation You $status ${abs(p1.adjustment)} total points."
     }
 }

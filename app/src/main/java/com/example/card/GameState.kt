@@ -397,7 +397,7 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
         if (isInitializing || currentPlayer != 1) return
         val hand = playerHands[1] ?: return
         val alreadyShownCount = shownCards[1]?.size ?: 0
-        val isFirstTurnBeforeDraw = isFirstTurn && currentTurnPhase == TurnPhase.DRAW
+        val isFirstHandBeforeDraw = isFirstTurn && currentTurnPhase == TurnPhase.DRAW
 
         // Check for Dubli Show - only if nothing shown yet
         if (hasShown[1] == false && alreadyShownCount == 0 && selectedCards.size == 14) {
@@ -427,7 +427,7 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
         }
 
         // Tunnela (Identical Triple) Show - ONLY in first hand before draw
-        if (hasShown[1] == false && alreadyShownCount == 0 && selectedCards.size == 3 && isFirstTurnBeforeDraw) { 
+        if (hasShown[1] == false && alreadyShownCount == 0 && selectedCards.size == 3 && isFirstHandBeforeDraw) { 
             val jokers = selectedCards.filter { it.rank == Rank.JOKER }
             val identical = selectedCards.size == 3 && selectedCards.all { 
                 it.rank == selectedCards[0].rank && it.suit == selectedCards[0].suit 
@@ -458,10 +458,11 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
                         hand.removeByReference(meldedCards)
                         shownCards[1]?.addAll(meldedCards)
                         hasShown[1] = true 
+                        
+                        pickMaalCard()
 
-                        val message = if (maalCard != null) "Success! Maal is already visible." 
-                                     else if (currentTurnPhase == TurnPhase.DRAW) "Success! Now draw your card."
-                                     else "Success! Now discard to see Maal."
+                        val message = if (currentTurnPhase == TurnPhase.DRAW) "Success! Maal revealed. Now draw your card."
+                                     else "Success! Maal revealed. Now discard to finish turn."
                         
                         showGameMessage(message)
                         
@@ -477,7 +478,7 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
                 }
             }
         } else if (hasShown[1] == false) {
-            val msg = if (isFirstTurnBeforeDraw && alreadyShownCount == 0)
+            val msg = if (isFirstHandBeforeDraw && alreadyShownCount == 0)
                 "Select 9 cards (3 melds), 3 identical cards for a Tunnel, or 14 for Dubli."
                 else "Select $requiredCardCount cards (${requiredMeldCount} more melds) to complete your show."
             showGameMessage(msg)
@@ -607,7 +608,7 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
         }
         val humanHand = playerHands[1]?.toList() ?: return
         val alreadyShownCount = shownCards[1]?.size ?: 0
-        val isFirstTurnBeforeDraw = isFirstTurn && currentTurnPhase == TurnPhase.DRAW
+        val isFirstHandBeforeDraw = isFirstTurn && currentTurnPhase == TurnPhase.DRAW
         
         viewModelScope.launch {
             val mCards = withContext(Dispatchers.Default) { AiPlayer.findAllMeldedCards(humanHand, this@GameState, 1) }
@@ -617,7 +618,7 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
 
                 when (currentTurnPhase) {
                     TurnPhase.DRAW -> {
-                        if (hasShown[1] == false && alreadyShownCount == 0 && isFirstTurnBeforeDraw) {
+                        if (hasShown[1] == false && alreadyShownCount == 0 && isFirstHandBeforeDraw) {
                             val jokers = humanHand.filter { it.rank == Rank.JOKER }
                             val identical = humanHand.groupBy { it.rank to it.suit }.filter { it.value.size >= 3 }
                             if (jokers.size >= 3) {
