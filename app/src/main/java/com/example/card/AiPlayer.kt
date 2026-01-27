@@ -20,6 +20,9 @@ data class HandAnalysis(
 
 object AiPlayer {
 
+    /**
+     * Strategic check: Only prioritize Dubli if we have 5+ pairs and very few regular melds.
+     */
     fun isAimingForDubli(player: Int, hand: List<Card>, gameState: GameState): Boolean {
         if (gameState.hasShown[player] == true && gameState.isDubliShow[player] != true) return false
         if (gameState.isDubliShow[player] == true) return true
@@ -27,11 +30,8 @@ object AiPlayer {
         val dublis = findDublis(hand)
         val initialMelds = findAllInitialMelds(hand)
         
-        return when {
-            dublis.size >= 5 -> true
-            dublis.size >= 4 && initialMelds.size <= 1 -> true
-            else -> false
-        }
+        // Refined: Only aim for Dubli if 5+ pairs AND 1 or 0 melds found.
+        return dublis.size >= 5 && initialMelds.size <= 1
     }
 
     fun findDublis(hand: List<Card>): List<List<Card>> {
@@ -44,18 +44,13 @@ object AiPlayer {
 
     fun findAllMeldedCards(hand: List<Card>, gameState: GameState, player: Int): List<Card> {
         val dublis = findDublis(hand)
-        
-        if (isAimingForDubli(player, hand, gameState)) {
-            return dublis.flatten()
-        }
-
         val melds = findAllMelds(hand, gameState, player)
+        
         val meldedCards = melds.flatten()
         val dubliCards = if (dublis.size >= 4) dublis.flatten() else emptyList()
         
-        val combined = (meldedCards + dubliCards).distinctBy { it.id }
-        
-        return combined
+        // Union of cards contributing to both potential systems.
+        return (meldedCards + dubliCards).distinctBy { it.id }
     }
 
     private fun findAllMelds(hand: List<Card>, gameState: GameState, player: Int): List<List<Card>> {
@@ -156,7 +151,7 @@ object AiPlayer {
         }
         
         val firstIdx = used.nextClearBit(0)
-        if (firstIdx >= allCards.size || depth > 40) return false 
+        if (firstIdx >= allCards.size || depth > 20) return false 
 
         if (canDiscard) {
             used.set(firstIdx)
@@ -284,11 +279,13 @@ object AiPlayer {
     fun calculateCardPotential(card: Card, hand: List<Card>, gameState: GameState, player: Int, analysis: HandAnalysis): Int {
         if (gameState.isJoker(card, player)) return 1000
         if (GameEngine.isMaal(card, gameState.maalCard)) return 800
-        val isDubliStrategy = isAimingForDubli(player, hand, gameState)
+        
         val isIdentical = analysis.identicalMatchIds.contains(card.id)
         val dubliScore = if (isIdentical) 500 else 0
-        if (isDubliStrategy) return dubliScore
+        
         val meldScore = calculateMeldPotential(card, hand, gameState, player, analysis)
+        
+        // Return the highest potential found. Lone cards will have 0 here.
         return maxOf(meldScore, dubliScore)
     }
 
@@ -344,8 +341,16 @@ object AiPlayer {
         if (nonJokers.isEmpty()) return listOf(hand.first())
         val analysis = analyzeHand(hand, gameState, player)
         val scores = nonJokers.map { card ->
-            if (analysis.meldedIds.contains(card.id)) card to 10000 
-            else card to calculateCardPotential(card, hand, gameState, player, analysis)
+            if (analysis.meldedIds.contains(card.id)) {
+                card to 10000.0 
+            } else {
+                val potential = calculateCardPotential(card, hand, gameState, player, analysis)
+                // Tie-breaker: Prefer discarding high-value cards (Ace=14, etc.) if they have same potential.
+                // Worthless cards (potential 0) will be sorted by rank value.
+                // Subtract a fraction of rank value from potential to make higher ranks slightly more discardable.
+                val score = potential.toDouble() + (1.0 - (card.rank.value.toDouble() / 20.0))
+                card to score
+            }
         }
         val sorted = scores.sortedBy { it.second }
         return sorted.map { it.first }
@@ -365,7 +370,7 @@ object AiPlayer {
             analysis.consecutiveRunIds.contains(bestCard.id) -> "Discarding ${bestCard.rank.symbol}${bestCard.suit.symbol} near a sequence."
             analysis.gapRunIds.contains(bestCard.id) -> "Discarding ${bestCard.rank.symbol}${bestCard.suit.symbol} (gap connection)."
             analysis.pairIds.contains(bestCard.id) -> "Discarding ${bestCard.rank.symbol}${bestCard.suit.symbol} (mixed-suit pair)."
-            else -> "Discarding ${bestCard.rank.symbol}${bestCard.suit.symbol} (lowest value)."
+            else -> "Discarding ${bestCard.rank.symbol}${bestCard.suit.symbol} (worthless card)."
         }
         return DiscardDecision(bestCard, reason)
     }
@@ -374,24 +379,17 @@ object AiPlayer {
         if (gameState.isJoker(card, player)) return DrawDecision(true, "Always pick a Joker!")
         if (GameEngine.isMaal(card, gameState.maalCard)) return DrawDecision(true, "Pick this Maal card!")
         
-        // Check if we already have this card in a meld to avoid redundancy
         val currentMelds = findAllMelds(hand, gameState, player)
         val isAlreadyMelded = currentMelds.any { meld -> meld.any { it.rank == card.rank && it.suit == card.suit } }
 
         if (hand.any { it.rank == card.rank && it.suit == card.suit }) {
             val countInHand = hand.count { it.rank == card.rank && it.suit == card.suit }
             if (countInHand >= 3 && !isAimingForDubli(player, hand, gameState)) return DrawDecision(false, "Already have a Tunnela.")
-            
-            // If we have 1 or 2 of these cards and they are ALREADY part of a meld, don't draw a duplicate
-            // unless it can form a DIFFERENT meld with other cards.
-            if (isAlreadyMelded && !isAimingForDubli(player, hand, gameState)) {
-                // We'll only consider drawing it if it forms a NEW meld with cards that are NOT part of the existing meld using this rank/suit.
-                // This is a bit complex, so we'll let the loop below handle it by checking pairs.
-            }
         }
 
         if (isAimingForDubli(player, hand, gameState)) {
-            return if (isPartOfIdenticalMatch(card, hand)) DrawDecision(true, "Forms a Dubli.") else DrawDecision(false, "No pair for Dubli.")
+            val formsPair = isPartOfIdenticalMatch(card, hand)
+            if (formsPair) return DrawDecision(true, "Take this! It forms an identical pair (Dubli).")
         }
 
         val hasShown = gameState.hasShown[player] == true
@@ -400,25 +398,22 @@ object AiPlayer {
             if (!isPotentiallyRelated(card, c2, gameState, player)) continue
             for (j in i + 1 until hand.size) {
                 val c3 = hand[j]
-                
-                // Redundancy Check: If c2 and c3 are already melded together with an identical card, skip.
                 val areAlreadyMeldedTogether = currentMelds.any { meld -> 
                     meld.contains(c2) && meld.contains(c3) && meld.any { it.rank == card.rank && it.suit == card.suit }
                 }
                 if (areAlreadyMeldedTogether) continue
 
                 if (hasShown) { 
-                    if (isValidGeneralMeld(card, c2, c3, gameState, player)) return DrawDecision(true, "Completes a meld.") 
+                    if (isValidGeneralMeld(card, c2, c3, gameState, player)) return DrawDecision(true, "Take it! Completes a meld.") 
                 } else { 
-                    if (isValidInitialMeld(card, c2, c3)) return DrawDecision(true, "Forms a pure meld.") 
+                    if (isValidInitialMeld(card, c2, c3)) return DrawDecision(true, "Take it! Forms a pure meld.") 
                 }
             }
         }
 
         if (isAlreadyMelded && !isAimingForDubli(player, hand, gameState)) return DrawDecision(false, "Already in a meld.")
-
         if (isPartOfConsecutiveRun(card, hand, gameState, player)) return DrawDecision(true, "Strong sequence connection.")
-        return DrawDecision(false, "Doesn't help form a meld.")
+        return DrawDecision(false, "Draw from stock to find cards for your required melds.")
     }
 
     private fun findAnyMeldGreedyIndices(cards: List<Card>, used: BitSet, gameState: GameState, player: Int, ignoreShownStatus: Boolean): List<Int>? {

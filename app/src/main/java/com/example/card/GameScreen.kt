@@ -362,18 +362,23 @@ fun GameControls(
 fun ActionButtons(gameState: GameState) {
     Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
         if (gameState.winner == null && gameState.currentPlayer == 1) {
+            // SHOW button logic
             if (gameState.hasShown[1] == false && 
-                (gameState.currentTurnPhase == TurnPhase.DRAW || gameState.currentTurnPhase == TurnPhase.PLAY_OR_DISCARD || gameState.currentTurnPhase == TurnPhase.SHOW_OR_END)
+                (gameState.currentTurnPhase == TurnPhase.INITIAL_CHECK || gameState.currentTurnPhase == TurnPhase.DRAW || gameState.currentTurnPhase == TurnPhase.PLAY_OR_DISCARD || gameState.currentTurnPhase == TurnPhase.SHOW_OR_END)
             ) {
                 val selected = gameState.selectedCards.toList()
-                val canShow = when (selected.size) {
-                    3 -> {
+                val alreadyShown = gameState.shownCards[1]?.size ?: 0
+                val reqMelds = 3 - (alreadyShown / 3)
+                val reqCards = reqMelds * 3
+
+                val canShow = when {
+                    selected.size == 3 && alreadyShown == 0 && gameState.currentTurnPhase == TurnPhase.INITIAL_CHECK -> {
                         val jokers = selected.filter { it.rank == Rank.JOKER }
                         val identical = selected.all { it.rank == selected[0].rank && it.suit == selected[0].suit }
                         jokers.size == 3 || identical
                     }
-                    9 -> AiPlayer.findAllInitialMelds(selected).size >= 3
-                    14 -> AiPlayer.findDublis(selected).size >= 7
+                    selected.size == reqCards && reqMelds > 0 -> AiPlayer.findAllInitialMelds(selected).size >= reqMelds
+                    selected.size == 14 && alreadyShown == 0 -> AiPlayer.findDublis(selected).size >= 7
                     else -> false
                 }
 
@@ -381,7 +386,15 @@ fun ActionButtons(gameState: GameState) {
                     Text("SHOW", fontWeight = FontWeight.Bold)
                 }
             }
+
+            // PROCEED button for INITIAL_CHECK
+            if (gameState.currentTurnPhase == TurnPhase.INITIAL_CHECK) {
+                Button(onClick = { gameState.humanEndsInitialCheck() }) {
+                    Text("PROCEED", fontWeight = FontWeight.Bold)
+                }
+            }
             
+            // DISCARD/WIN button logic
             if (gameState.currentTurnPhase == TurnPhase.PLAY_OR_DISCARD && gameState.selectedCards.size == 1) {
                 val selected = gameState.selectedCards.first()
                 val hand = gameState.playerHands[1]?.toList() ?: emptyList()
@@ -398,6 +411,7 @@ fun ActionButtons(gameState: GameState) {
                 }
             }
 
+            // END TURN button
             if (gameState.currentTurnPhase == TurnPhase.SHOW_OR_END) {
                 Button(onClick = { gameState.humanEndsTurnWithoutShowing() }) {
                     Text("END TURN", fontWeight = FontWeight.Bold)
@@ -569,7 +583,7 @@ fun MainGameLayoutPlay(
             Row(horizontalArrangement = Arrangement.spacedBy(24.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box(modifier = Modifier.onGloballyPositioned { onStockPilePositioned(it.localToRoot(Offset.Zero)) }) {
                     PileView("Stock", gameState.stockPile, false, cardHeight * 0.8f, cardWidth * 0.8f) {
-                        if (gameState.currentPlayer == 1 && gameState.currentTurnPhase == TurnPhase.DRAW) gameState.humanDrawsFromStock()
+                        if (gameState.currentPlayer == 1 && (gameState.currentTurnPhase == TurnPhase.DRAW || gameState.currentTurnPhase == TurnPhase.INITIAL_CHECK)) gameState.humanDrawsFromStock()
                     }
                 }
                 
@@ -587,7 +601,7 @@ fun MainGameLayoutPlay(
 
                 Box(modifier = Modifier.onGloballyPositioned { onDiscardPilePositioned(it.localToRoot(Offset.Zero)) }) {
                     PileView("Discard", gameState.discardPile, true, cardHeight * 0.8f, cardWidth * 0.8f) {
-                        if (gameState.currentPlayer == 1 && gameState.currentTurnPhase == TurnPhase.DRAW) gameState.humanDrawsFromDiscard()
+                        if (gameState.currentPlayer == 1 && (gameState.currentTurnPhase == TurnPhase.DRAW || gameState.currentTurnPhase == TurnPhase.INITIAL_CHECK)) gameState.humanDrawsFromDiscard()
                     }
                 }
             }

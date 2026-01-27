@@ -1,7 +1,5 @@
 package com.example.card
 
-import kotlin.math.abs
-
 data class MaalBreakdown(
     val card: Card?,
     val points: Int,
@@ -65,12 +63,6 @@ object GameEngine {
             isNeighbor -> 2
             else -> 0
         }
-    }
-
-    fun isJoker(card: Card, player: Int, hasShown: Map<Int, Boolean>, maalCard: Card?): Boolean {
-        if (card.rank == Rank.JOKER) return true
-        if (hasShown[player] != true || maalCard == null) return false
-        return isMaal(card, maalCard)
     }
 
     /**
@@ -145,9 +137,9 @@ object GameEngine {
                     else -> "Multiple"
                 }
                 
-                val reason = when {
-                    card.rank == Rank.JOKER -> "Joker ($label)"
-                    card.rank == m.rank -> "Tiplu ($label)"
+                val reason = when (val rank = card.rank) {
+                    Rank.JOKER -> "Joker ($label)"
+                    m.rank -> "Tiplu ($label)"
                     else -> "Poplu/Jhiplu ($label)"
                 }
                 
@@ -194,7 +186,6 @@ object GameEngine {
             
             var adjustment = 0
             if (player == 1) {
-                val othersMaal = maals.getOrElse(1) { 0 } // Fallback for safety
                 val totalOthersMaal = maals.drop(1).sum()
                 val baseMaalDiff = totalOthersMaal - (playerCount - 1) * humanMaal
                 

@@ -500,9 +500,7 @@ fun GameEndOverlay(gameState: GameState, navController: NavController) {
     }
 }
 
-/**
- * A simple FlowRow implementation since standard Compose FlowRow might not be available or imported.
- */
+
 @Composable
 fun FlowRow(
     modifier: Modifier = Modifier,
