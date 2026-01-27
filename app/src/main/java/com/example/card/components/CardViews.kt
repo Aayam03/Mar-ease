@@ -134,8 +134,8 @@ fun PlayerHandView(
                 
                 val displayBorder = when {
                     isLastDrawn -> BorderStroke(3.dp, Color.Yellow) // Yellow for last drawn card
+                    isJoker && (gameState.hasShown[1] == true) -> BorderStroke(2.dp, Color.Cyan) // Joker priority after show
                     isMelded -> BorderStroke(2.dp, Color(0xFF4CAF50)) // Green for Melds
-                    isJoker && (gameState.hasShown[1] == true) -> BorderStroke(2.dp, Color.Cyan)
                     else -> null
                 }
 

@@ -27,6 +27,7 @@ fun MutableList<Card>.removeByReference(cardsToRemove: List<Card>) {
 }
 
 enum class TurnPhase {
+    INITIAL_CHECK,
     DRAW,
     PLAY_OR_DISCARD,
     SHOW_OR_END,
@@ -114,34 +115,54 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
                         shownCards[i] = mutableStateListOf()
                         isFirstTurn[i] = true
                         
-                        // Check for starting Bonuses (Tunnelas)
                         val hand = playerHands[i] ?: emptyList()
-                        val tunnelas = hand.groupBy { it.rank to it.suit }
-                            .filter { it.value.size >= 3 }
-                        
+                        val tunnelas = hand.groupBy { it.rank to it.suit }.filter { it.value.size >= 3 }
                         var bonus = 0
-                        tunnelas.forEach { (key, list) ->
-                            bonus += if (key.first == Rank.JOKER) 30 else 5
-                        }
+                        tunnelas.forEach { (key, list) -> bonus += if (key.first == Rank.JOKER) 30 else 5 }
                         startingBonuses[i] = bonus
                     }
                     
                     maalCard = null
                     winner = null
                     gameMessage = null
-                    
                     currentPlayer = Random.nextInt(1, count + 1) 
-                    
-                    currentTurnPhase = TurnPhase.DRAW
                     isInitializing = false
                     lastDrawnCard = null
 
-                    if (currentPlayer != 1) {
-                        processAiTurn()
-                    } else {
-                        updateHint()
-                    }
+                    // Enter Initial Check phase for everyone on turn 1
+                    currentTurnPhase = TurnPhase.INITIAL_CHECK
+                    processInitialCheck()
                 }
+            }
+        }
+    }
+
+    private fun processInitialCheck() {
+        if (currentPlayer == 1) {
+            updateHint() // Human will see tunnel hints if any
+        } else {
+            // AI automatically reveals tunnels if any
+            val aiHand = playerHands[currentPlayer] ?: return
+            val jokers = aiHand.filter { it.rank == Rank.JOKER }
+            val identical = aiHand.groupBy { it.rank to it.suit }.filter { it.value.size >= 3 }
+            
+            if (jokers.size >= 3) {
+                val cards = jokers.take(3)
+                aiHand.removeByReference(cards)
+                shownCards[currentPlayer]?.addAll(cards)
+                if (aiHand.size == 18) pickMaalCard()
+            } else if (identical.isNotEmpty()) {
+                val cards = identical.values.first().take(3)
+                aiHand.removeByReference(cards)
+                shownCards[currentPlayer]?.addAll(cards)
+                if (aiHand.size == 18) pickMaalCard()
+            }
+            
+            // Move to DRAW phase for AI
+            viewModelScope.launch {
+                delay(1000)
+                currentTurnPhase = TurnPhase.DRAW
+                processAiTurn()
             }
         }
     }
@@ -158,32 +179,21 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
     fun isJoker(card: Card, player: Int): Boolean {
         if (card.rank == Rank.JOKER) return true
         if (isDubliShow[player] == true) return false
-        
         val playerHasShown = hasShown[player] == true
         if (!playerHasShown) return false
-        
         val m = maalCard ?: return false
         return GameEngine.isMaal(card, m)
     }
     
     fun calculateMaal(player: Int): Int {
         val bonus = startingBonuses[player] ?: 0
-        return GameEngine.calculateMaal(
-            player = player, 
-            playerHands = playerHands.toMap(), 
-            shownCards = shownCards.toMap(), 
-            hasShown = hasShown.toMap(), 
-            maalCard = maalCard, 
-            startingBonus = bonus
-        )
+        return GameEngine.calculateMaal(player, playerHands.toMap(), shownCards.toMap(), hasShown.toMap(), maalCard, bonus)
     }
 
     private fun checkWin(player: Int) {
         val hand = playerHands[player]?.toList() ?: return
         viewModelScope.launch {
-            val isWin = withContext(Dispatchers.Default) {
-                AiPlayer.canFinish(hand, this@GameState, player)
-            }
+            val isWin = withContext(Dispatchers.Default) { AiPlayer.canFinish(hand, this@GameState, player) }
             if (isWin) {
                 withContext(Dispatchers.Main) {
                     winner = player
@@ -203,16 +213,7 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
         
         viewModelScope.launch {
             val message = withContext(Dispatchers.Default) {
-                GameEngine.getFinalScoreReason(
-                    winner = w, 
-                    playerCount = playerCount, 
-                    playerHands = pHands, 
-                    shownCards = sCards, 
-                    hasShown = hShown, 
-                    maalCard = maalCard,
-                    isDubliShow = isDubli,
-                    startingBonuses = sBonuses
-                )
+                GameEngine.getFinalScoreReason(w, playerCount, pHands, sCards, hShown, maalCard, isDubli, sBonuses)
             }
             withContext(Dispatchers.Main) {
                 hint = Hint(title = "Game Over!", message = message)
@@ -220,21 +221,13 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
         }
     }
 
-    private fun moveCard(
-        card: Card,
-        player: Int,
-        type: AnimationType,
-        source: AnimationSource,
-        onLogicUpdate: () -> Unit
-    ) {
+    private fun moveCard(card: Card, player: Int, type: AnimationType, source: AnimationSource, onLogicUpdate: () -> Unit) {
         val isFaceUp = if (type == AnimationType.DRAW) player == 1 else true
-
         viewModelScope.launch {
             animationState = AnimationState(card, player, type, source, isFaceUp)
             delay(500)
             onLogicUpdate()
             animationState = null
-            
             if (type == AnimationType.DRAW) {
                 if (player == 1) lastDrawnCard = card
                 isFirstTurn[player] = false 
@@ -253,14 +246,12 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
             selectedCards.clear()
             checkWin(1)
             if (winner != null) return
-
             viewModelScope.launch {
                 val handList = hand.toList()
                 val alreadyShownCount = shownCards[1]?.size ?: 0
                 val reqMelds = 3 - (alreadyShownCount / 3)
                 val canShowRegular = withContext(Dispatchers.Default) { AiPlayer.findAllInitialMelds(handList).size >= reqMelds }
                 val canShowDubli = alreadyShownCount == 0 && withContext(Dispatchers.Default) { AiPlayer.findDublis(handList).size >= 7 }
-                
                 withContext(Dispatchers.Main) {
                     if (hasShown[1] == false && (canShowRegular || canShowDubli)) {
                         currentTurnPhase = TurnPhase.SHOW_OR_END
@@ -394,7 +385,7 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
         if (isInitializing || currentPlayer != 1) return
         val hand = playerHands[1] ?: return
         val alreadyShownCount = shownCards[1]?.size ?: 0
-        val isFirstHandBeforeDraw = isFirstTurn[1] == true && currentTurnPhase == TurnPhase.DRAW
+        val isFirstTurnCheck = isFirstTurn[1] == true && currentTurnPhase == TurnPhase.INITIAL_CHECK
 
         if (hasShown[1] == false && alreadyShownCount == 0 && selectedCards.size == 14) {
             val selectedList = selectedCards.toList()
@@ -411,14 +402,14 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
                         if (hand.size == 7) pickMaalCard()
                         selectedCards.clear()
                         updateHint()
-                        if (currentTurnPhase != TurnPhase.DRAW) currentTurnPhase = TurnPhase.PLAY_OR_DISCARD
+                        currentTurnPhase = TurnPhase.PLAY_OR_DISCARD
                     }
                 }
             }
             return
         }
 
-        if (hasShown[1] == false && alreadyShownCount == 0 && selectedCards.size == 3 && isFirstHandBeforeDraw) { 
+        if (hasShown[1] == false && alreadyShownCount == 0 && selectedCards.size == 3 && isFirstTurnCheck) { 
             val jokers = selectedCards.filter { it.rank == Rank.JOKER }
             val identical = selectedCards.size == 3 && selectedCards.all { it.rank == selectedCards[0].rank && it.suit == selectedCards[0].suit }
             if (jokers.size == 3 || identical) {
@@ -456,6 +447,13 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
         }
     }
 
+    fun humanEndsInitialCheck() {
+        if (currentPlayer == 1 && currentTurnPhase == TurnPhase.INITIAL_CHECK) {
+            currentTurnPhase = TurnPhase.DRAW
+            updateHint()
+        }
+    }
+
     fun humanEndsTurnWithoutShowing() {
         if (currentPlayer == 1 && currentTurnPhase == TurnPhase.SHOW_OR_END) {
             currentTurnPhase = TurnPhase.ENDED
@@ -484,8 +482,13 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
         viewModelScope.launch {
             delay(500)
             currentPlayer = if (currentPlayer == playerCount) 1 else currentPlayer + 1
-            currentTurnPhase = TurnPhase.DRAW
-            if (currentPlayer != 1) processAiTurn() else updateHint()
+            if (isFirstTurn[currentPlayer] == true) {
+                currentTurnPhase = TurnPhase.INITIAL_CHECK
+                processInitialCheck()
+            } else {
+                currentTurnPhase = TurnPhase.DRAW
+                if (currentPlayer != 1) processAiTurn() else updateHint()
+            }
         }
     }
 
@@ -494,21 +497,6 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
         viewModelScope.launch {
             val aiHand = playerHands[myPlayerId] ?: return@launch
             try {
-                if (isFirstTurn[myPlayerId] == true && currentPlayer == myPlayerId && currentTurnPhase == TurnPhase.DRAW) {
-                    val jokers = aiHand.filter { it.rank == Rank.JOKER }
-                    val identical = aiHand.groupBy { it.rank to it.suit }.filter { it.value.size >= 3 }
-                    if (jokers.size >= 3) {
-                        val cards = jokers.take(3)
-                        aiHand.removeByReference(cards)
-                        shownCards[myPlayerId]?.addAll(cards)
-                        if (aiHand.size == 18) pickMaalCard()
-                    } else if (identical.isNotEmpty()) {
-                        val cards = identical.values.first().take(3)
-                        aiHand.removeByReference(cards)
-                        shownCards[myPlayerId]?.addAll(cards)
-                        if (aiHand.size == 18) pickMaalCard()
-                    }
-                }
                 delay(500)
                 if (currentPlayer != myPlayerId || currentTurnPhase != TurnPhase.DRAW) return@launch
                 val cardFromDiscard = discardPile.lastOrNull()
@@ -563,22 +551,20 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
         }
         val humanHand = playerHands[1]?.toList() ?: return
         val alreadyShownCount = shownCards[1]?.size ?: 0
-        val isFirstHandBeforeDraw = isFirstTurn[1] == true && currentTurnPhase == TurnPhase.DRAW
         viewModelScope.launch {
             val mCards = withContext(Dispatchers.Default) { AiPlayer.findAllMeldedCards(humanHand, this@GameState, 1) }
             withContext(Dispatchers.Main) {
                 meldedCards.clear()
                 meldedCards.addAll(mCards)
                 when (currentTurnPhase) {
-                    TurnPhase.DRAW -> {
-                        if (hasShown[1] == false && alreadyShownCount == 0 && isFirstHandBeforeDraw) {
-                            val jokers = humanHand.filter { it.rank == Rank.JOKER }
-                            val identical = humanHand.groupBy { it.rank to it.suit }.filter { it.value.size >= 3 }
-                            if (jokers.size >= 3) hint = Hint(title = "Tunnel Found!", message = "Select 3 Jokers and SHOW.", cards = jokers.take(3))
-                            else if (identical.isNotEmpty()) hint = Hint(title = "Tunnel Found!", message = "Select 3 identical cards and SHOW.", cards = identical.values.first().take(3))
-                            else updateDrawHint(humanHand)
-                        } else updateDrawHint(humanHand)
+                    TurnPhase.INITIAL_CHECK -> {
+                        val jokers = humanHand.filter { it.rank == Rank.JOKER }
+                        val identical = humanHand.groupBy { it.rank to it.suit }.filter { it.value.size >= 3 }
+                        if (jokers.size >= 3) hint = Hint(title = "Tunnel!", message = "Select 3 Jokers and SHOW.", cards = jokers.take(3))
+                        else if (identical.isNotEmpty()) hint = Hint(title = "Tunnel!", message = "Select 3 identical cards and SHOW.", cards = identical.values.first().take(3))
+                        else hint = Hint(title = "No Tunnels", message = "Press PROCEED to draw your first card.")
                     }
+                    TurnPhase.DRAW -> updateDrawHint(humanHand)
                     TurnPhase.PLAY_OR_DISCARD -> {
                         val winCard = humanHand.find { card -> AiPlayer.canFinish(humanHand.filter { it !== card }, this@GameState, 1) }
                         if (winCard != null) hint = Hint(title = "Victory!", message = "Discard ${winCard.rank.symbol} to WIN!", cards = listOf(winCard))
@@ -608,7 +594,7 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
                             else hint = Hint(title = "Strategy", message = "End your turn.")
                         }
                     }
-                    TurnPhase.ENDED -> hint = null
+                    else -> hint = null
                 }
             }
         }
