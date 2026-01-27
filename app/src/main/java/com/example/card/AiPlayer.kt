@@ -485,6 +485,16 @@ object AiPlayer {
         if (gameState.isJoker(card, player)) return DrawDecision(true, "Always pick a Joker! It can substitute for any card.")
         if (GameEngine.isMaal(card, gameState.maalCard)) return DrawDecision(true, "Pick this Maal card! It gives you immediate points and acts as a Joker.")
 
+        // Check if the card is already in hand (redundant pick)
+        if (hand.any { it.rank == card.rank && it.suit == card.suit }) {
+            // Note: In 21-card, identical cards are allowed, but picking a 4th identical card 
+            // when you already have a Tunnela (3 identical) is often not optimal unless for Dubli.
+            val countInHand = hand.count { it.rank == card.rank && it.suit == card.suit }
+            if (countInHand >= 3 && !isAimingForDubli(player, hand, gameState)) {
+                return DrawDecision(false, "You already have a Tunnela of ${card.rank.symbol}${card.suit.symbol}. Drawing another is usually redundant.")
+            }
+        }
+
         val isDubliStrategy = isAimingForDubli(player, hand, gameState)
         
         if (isDubliStrategy) {
@@ -514,6 +524,13 @@ object AiPlayer {
             }
         }
         
+        // Check if picking this card creates a NEW meld that we don't already have.
+        // If it just replicates a card in an existing meld (like the user's 4Heart case), we should decline.
+        val meldedCards = findAllMeldedCards(hand, gameState, player)
+        if (meldedCards.any { it.rank == card.rank && it.suit == card.suit }) {
+            return DrawDecision(false, "You already have ${card.rank.symbol}${card.suit.symbol} in a meld. Drawing a duplicate usually doesn't help unless you're going for Dubli.")
+        }
+
         // Strong connection check (near-meld)
         if (isPartOfConsecutiveRun(card, hand, gameState, player)) {
             return DrawDecision(true, "Pick this. It creates a consecutive sequence, making it very likely you'll form a run on a future turn.")
