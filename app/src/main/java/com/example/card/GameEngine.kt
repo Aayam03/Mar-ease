@@ -19,7 +19,8 @@ data class PlayerScoreResult(
 
 data class GameResult(
     val winner: Int,
-    val playerResults: List<PlayerScoreResult>
+    val playerResults: List<PlayerScoreResult>,
+    val explanation: String
 )
 
 object GameEngine {
@@ -164,27 +165,14 @@ object GameEngine {
 
     fun calculateMaal(
         player: Int, 
-        playerHands: Map<Map<Int, List<Card>>, Any?>, // Fixed signature mismatch if any
-        playerHandsMap: Map<Int, List<Card>>,
-        shownCards: Map<Int, List<Card>>, 
-        hasShown: Map<Int, Boolean>, 
-        maalCard: Card?,
-        startingBonus: Int = 0
-    ): Int {
-        if (hasShown[player] != true) return 0
-        return getDetailedMaalBreakdown(player, playerHandsMap, shownCards, hasShown, maalCard, startingBonus).sumOf { it.points }
-    }
-    
-    // Overload for convenience
-    fun calculateMaal(
-        player: Int, 
         playerHands: Map<Int, List<Card>>, 
         shownCards: Map<Int, List<Card>>, 
         hasShown: Map<Int, Boolean>, 
         maalCard: Card?,
         startingBonus: Int = 0
     ): Int {
-        return calculateMaal(player, emptyMap(), playerHands, shownCards, hasShown, maalCard, startingBonus)
+        if (hasShown[player] != true) return 0
+        return getDetailedMaalBreakdown(player, playerHands, shownCards, hasShown, maalCard, startingBonus).sumOf { it.points }
     }
 
     fun getGameResult(
@@ -201,6 +189,9 @@ object GameEngine {
             calculateMaal(it, playerHands, shownCards, hasShown, maalCard, startingBonuses[it] ?: 0) 
         }
         
+        val explanationBuilder = StringBuilder()
+        explanationBuilder.append("Winner: Player $winner\n\n")
+        
         val playerResults = (1..playerCount).map { player ->
             val idx = player - 1
             val humanMaal = maals[0]
@@ -212,6 +203,10 @@ object GameEngine {
                 val totalOthersMaal = othersMaal.sum()
                 val baseMaalDiff = totalOthersMaal - (playerCount - 1) * humanMaal
                 
+                explanationBuilder.append("--- Final Calculation for You ---\n")
+                explanationBuilder.append("Maal Difference: $totalOthersMaal (Others) - (${playerCount - 1} × $humanMaal) (Yours) = $baseMaalDiff\n")
+                
+                val bonusExplanation = StringBuilder()
                 val winnerAdjustment = if (winner == 1) {
                     var collect = 0
                     for (p in 2..playerCount) {
@@ -219,18 +214,28 @@ object GameEngine {
                         val winBase = if (isWinnerDubli) 5 else 3
                         val loseNoShowBase = if (isWinnerDubli) 15 else 10
                         
-                        collect += if (hasShown[p] == true) winBase else loseNoShowBase
+                        val points = if (hasShown[p] == true) winBase else loseNoShowBase
+                        val reason = if (hasShown[p] == true) "showed" else "didn't show"
+                        bonusExplanation.append("Player $p gave $points because they $reason.\n")
+                        collect += points
                     }
                     -collect
                 } else {
+                    val isWinnerDubli = isDubliShow[winner] == true
                     if (hasShown[1] == true) {
-                        if (isDubliShow[1] == true) 0 else 3
+                        val points = if (isDubliShow[1] == true) 0 else 3
+                        bonusExplanation.append("You gave $points to Player $winner because you showed.\n")
+                        points
                     } else {
-                        val isWinnerDubli = isDubliShow[winner] == true
-                        if (isWinnerDubli) 15 else 10
+                        val points = if (isWinnerDubli) 15 else 10
+                        bonusExplanation.append("You gave $points to Player $winner because you didn't show.\n")
+                        points
                     }
                 }
+                
+                explanationBuilder.append("Win/Loss Bonus:\n$bonusExplanation")
                 adjustment = baseMaalDiff + winnerAdjustment
+                explanationBuilder.append("Total Adjustment: $baseMaalDiff + ($winnerAdjustment) = $adjustment")
             }
 
             PlayerScoreResult(
@@ -243,7 +248,7 @@ object GameEngine {
             )
         }
 
-        return GameResult(winner, playerResults)
+        return GameResult(winner, playerResults, explanationBuilder.toString())
     }
 
     fun getFinalScoreDifference(
@@ -269,32 +274,6 @@ object GameEngine {
         isDubliShow: Map<Int, Boolean> = emptyMap(),
         startingBonuses: Map<Int, Int> = emptyMap()
     ): String {
-        val result = getGameResult(winner, playerCount, playerHands, shownCards, hasShown, maalCard, isDubliShow, startingBonuses)
-        val p1 = result.playerResults[0]
-        val maalsText = result.playerResults.joinToString(", ") { "P${it.player}: ${it.totalMaal}${if (it.isDubli) "(D)" else ""}" }
-        
-        val humanMaal = p1.totalMaal
-        val otherMaals = result.playerResults.drop(1).map { it.totalMaal }
-        val sumOthers = otherMaals.sum()
-        val maalDiff = sumOthers - (playerCount - 1) * humanMaal
-        
-        val winBonus = p1.adjustment - maalDiff
-        val status = if (p1.adjustment > 0) "Pay" else "Collect"
-        
-        val formula = "Formula: Adjustment = [Σ(Others' Maal) - (Count × Your Maal)] + [Win/Loss Bonus]"
-        val calculation = "Calculation: [$sumOthers - (${playerCount - 1} × $humanMaal)] + [$winBonus] = ${p1.adjustment}"
-        
-        val explanation = if (winner == 1) {
-            "As the winner, you collect bonuses from others (3-10 each)."
-        } else {
-            if (p1.hasShown) "Since you showed, you only pay a small penalty (3) to the winner."
-            else "Since you didn't show, you pay a full penalty (10-15) to the winner."
-        }
-
-        return "Game Over! Winner: P$winner\n" +
-               "Maal Summary: $maalsText\n\n" +
-               "$formula\n" +
-               "$calculation\n\n" +
-               "Explanation: $explanation You $status ${abs(p1.adjustment)} total points."
+        return getGameResult(winner, playerCount, playerHands, shownCards, hasShown, maalCard, isDubliShow, startingBonuses).explanation
     }
 }

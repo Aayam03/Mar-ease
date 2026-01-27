@@ -17,9 +17,11 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -365,9 +367,18 @@ fun DubliStrategyOverlay(onDismiss: () -> Unit) {
 
 @Composable
 fun GameEndOverlay(gameState: GameState, navController: NavController) {
-    val breakdown = GameEngine.getDetailedMaalBreakdown(1, gameState.playerHands, gameState.shownCards, gameState.hasShown, gameState.maalCard)
-    val totalBonus = gameState.startingBonuses[1] ?: 0
-    val totalMaal = gameState.calculateMaal(1)
+    val result = remember {
+        GameEngine.getGameResult(
+            winner = gameState.winner!!,
+            playerCount = gameState.playerCount,
+            playerHands = gameState.playerHands.mapValues { it.value.toList() },
+            shownCards = gameState.shownCards.mapValues { it.value.toList() },
+            hasShown = gameState.hasShown.toMap(),
+            maalCard = gameState.maalCard,
+            isDubliShow = gameState.isDubliShow.toMap(),
+            startingBonuses = gameState.startingBonuses.toMap()
+        )
+    }
     
     Box(
         modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.8f)),
@@ -381,42 +392,73 @@ fun GameEndOverlay(gameState: GameState, navController: NavController) {
                 Text("Game Results", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(8.dp))
                 
-                Text(text = gameState.hint?.message ?: "", style = MaterialTheme.typography.bodyLarge, textAlign = TextAlign.Center)
-                
-                Spacer(modifier = Modifier.height(12.dp))
-                Text("Your Maal Breakdown", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
-                Spacer(modifier = Modifier.height(4.dp))
-                
-                Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                    LazyVerticalGrid(
-                        columns = GridCells.Fixed(1),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.fillMaxSize()
-                    ) {
-                        if (totalBonus > 0) {
-                            item {
-                                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(4.dp)) {
-                                    Text("First Turn Bonus", modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
-                                    Text("+$totalBonus", fontWeight = FontWeight.Bold, color = Color(0xFF4CAF50))
+                LazyColumn(
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                    contentPadding = PaddingValues(bottom = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    items(result.playerResults) { playerRes ->
+                        val isHuman = playerRes.player == 1
+                        val icon = gameState.playerIcons[playerRes.player] ?: "🤖"
+                        val name = if (isHuman) "You (P1)" else "Player ${playerRes.player}"
+                        
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(containerColor = if (isHuman) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(8.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(icon, fontSize = 20.sp)
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(name, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                                    Spacer(modifier = Modifier.weight(1f))
+                                    Text("Total Maal: ${playerRes.totalMaal}", fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.primary)
+                                }
+                                
+                                if (playerRes.hasShown) {
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Text("Maal Breakdown:", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Light)
+                                    
+                                    // Row-based breakdown with card images
+                                    FlowRow(
+                                        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                                        mainAxisSpacing = 8.dp,
+                                        crossAxisSpacing = 8.dp
+                                    ) {
+                                        playerRes.breakdown.forEach { item ->
+                                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                                Box(modifier = Modifier.size(width = 30.dp, height = 45.dp)) {
+                                                    CardView(card = item.card, faceUp = true)
+                                                }
+                                                Text("+${item.points}", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF4CAF50))
+                                            }
+                                        }
+                                    }
+                                } else {
+                                    Text("Did not show cards", style = MaterialTheme.typography.bodySmall, color = Color.Gray, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)
                                 }
                             }
                         }
-                        items(breakdown) { item ->
-                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(4.dp)) {
-                                Box(modifier = Modifier.size(width = 35.dp, height = 50.dp)) {
-                                    CardView(card = item.card, faceUp = true)
-                                }
-                                Spacer(modifier = Modifier.width(12.dp))
-                                Text(item.reason, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
-                                Text("+${item.points}", fontWeight = FontWeight.Bold, color = Color(0xFF4CAF50))
-                            }
-                        }
-                        item {
-                            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-                            Row(modifier = Modifier.fillMaxWidth().padding(4.dp)) {
-                                Text("Total Maal Points", fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                                Text("$totalMaal", fontWeight = FontWeight.ExtraBold, fontSize = 18.sp)
-                            }
+                    }
+                    
+                    item {
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                        Text("Final Points Adjustment", fontWeight = FontWeight.ExtraBold, style = MaterialTheme.typography.titleLarge)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(containerColor = Color.Black.copy(alpha = 0.05f)),
+                            border = border(1.dp, Color.Gray.copy(alpha = 0.3f), RoundedCornerShape(8.dp))
+                        ) {
+                            Text(
+                                text = result.explanation, 
+                                modifier = Modifier.padding(12.dp),
+                                style = MaterialTheme.typography.bodyMedium,
+                                lineHeight = 20.sp,
+                                whiteSpace = androidx.compose.ui.text.style.TextOverflow.Visible
+                            )
                         }
                     }
                 }
@@ -424,22 +466,78 @@ fun GameEndOverlay(gameState: GameState, navController: NavController) {
                 Spacer(modifier = Modifier.height(12.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Button(
-                        onClick = { gameState.setupGame(4) },
+                        onClick = { gameState.setupGame(gameState.playerCount) },
                         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp)
                     ) {
-                        Text("Learn More")
+                        Text("New Game")
                     }
-                    Button(
-                        onClick = { navController.navigate("player_selection") },
+                    OutlinedButton(
+                        onClick = { navController.navigate("startup") { popUpTo("startup") { inclusive = true } } },
                         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp)
                     ) {
-                        Text("Play without Hints")
+                        Text("Exit to Menu")
                     }
                 }
             }
         }
     }
 }
+
+/**
+ * A simple FlowRow implementation since standard Compose FlowRow might not be available or imported.
+ */
+@Composable
+fun FlowRow(
+    modifier: Modifier = Modifier,
+    mainAxisSpacing: androidx.compose.ui.unit.Dp = 0.dp,
+    crossAxisSpacing: androidx.compose.ui.unit.Dp = 0.dp,
+    content: @Composable () -> Unit
+) {
+    androidx.compose.ui.layout.Layout(
+        modifier = modifier,
+        content = content
+    ) { measurables, constraints ->
+        val placeholders = measurables.map { it.measure(constraints.copy(minWidth = 0, minHeight = 0)) }
+        val layoutWidth = constraints.maxWidth
+        val lines = mutableListOf<List<androidx.compose.ui.layout.Placeable>>()
+        val lineHeights = mutableListOf<Int>()
+        var currentLine = mutableListOf<androidx.compose.ui.layout.Placeable>()
+        var currentLineWidth = 0
+
+        placeholders.forEach { placeable ->
+            if (currentLineWidth + placeable.width > layoutWidth && currentLine.isNotEmpty()) {
+                lines.add(currentLine)
+                lineHeights.add(currentLine.maxOf { it.height })
+                currentLine = mutableListOf()
+                currentLineWidth = 0
+            }
+            currentLine.add(placeable)
+            currentLineWidth += placeable.width + mainAxisSpacing.roundToPx()
+        }
+        if (currentLine.isNotEmpty()) {
+            lines.add(currentLine)
+            lineHeights.add(currentLine.maxOf { it.height })
+        }
+
+        val totalHeight = lineHeights.sum() + (lineHeights.size - 1).coerceAtLeast(0) * crossAxisSpacing.roundToPx()
+        
+        layout(layoutWidth, totalHeight) {
+            var y = 0
+            lines.forEachIndexed { index, line ->
+                var x = 0
+                line.forEach { placeable ->
+                    placeable.placeRelative(x, y)
+                    x += placeable.width + mainAxisSpacing.roundToPx()
+                }
+                y += lineHeights[index] + crossAxisSpacing.roundToPx()
+            }
+        }
+    }
+}
+
+private fun Modifier.border(width: androidx.compose.ui.unit.Dp, color: Color, shape: androidx.compose.ui.graphics.Shape) = this.then(
+    Modifier.border(width, color, shape)
+)
 
 @Composable
 fun ShownCardsView(

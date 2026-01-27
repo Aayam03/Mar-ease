@@ -294,7 +294,10 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
                             hasShown[player] = true
                             isDubliShow[player] = true
                             showGameMessage("Player $player has shown Dubli!")
-                            pickMaalCard()
+                            
+                            // AI Maal revelation check
+                            if (hand.size == 7) pickMaalCard()
+                            
                             checkWin(player)
                             if (winner == null) {
                                 currentTurnPhase = TurnPhase.ENDED
@@ -311,7 +314,9 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
                                 shownCards[player]?.addAll(meldedCards)
                                 hasShown[player] = true
                                 showGameMessage("Player $player has shown!")
-                                pickMaalCard()
+                                
+                                // AI Maal revelation check
+                                if (hand.size == 12) pickMaalCard()
                             }
                             checkWin(player)
                             if (winner == null) {
@@ -385,9 +390,13 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
                 if (idx != -1) hand.removeAt(idx)
                 discardPile.add(card)
 
-                if (hasShown[1] == true && maalCard == null) {
-                    pickMaalCard()
-                    showGameMessage("Maal Revealed!")
+                // Reveal Maal if hand size is at target starting-remainder size
+                if (maalCard == null) {
+                    val targetSize = if (isDubliShow[1] == true) 7 else if (hasShown[1] == true) 12 else if (shownCards[1]?.size == 3) 18 else -1
+                    if (targetSize != -1 && hand.size == targetSize) {
+                        pickMaalCard()
+                        showGameMessage("Maal Revealed!")
+                    }
                 }
             }
         }
@@ -413,7 +422,13 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
                         isDubliShow[1] = true
                         
                         showGameMessage("Dubli Show Success!")
-                        pickMaalCard()
+                        
+                        // Reveal Maal immediately if hand size is 7 (showed from 21 cards)
+                        if (hand.size == 7) {
+                            pickMaalCard()
+                            showGameMessage("Dubli Show Success! Maal Revealed.")
+                        }
+                        
                         selectedCards.clear()
                         updateHint()
                         
@@ -437,8 +452,15 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
                 val cardsToShow = selectedCards.toList()
                 hand.removeByReference(cardsToShow)
                 shownCards[1]?.addAll(cardsToShow)
-                pickMaalCard()
-                showGameMessage("Tunnel Revealed! Maal revealed.")
+                
+                // For Tunnela from 21 cards, hand becomes 18. Reveal immediately.
+                if (hand.size == 18) {
+                    pickMaalCard()
+                    showGameMessage("Tunnel Revealed! Maal revealed.")
+                } else {
+                    showGameMessage("Tunnel Revealed!")
+                }
+                
                 selectedCards.clear()
                 updateHint()
                 return 
@@ -458,13 +480,16 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
                         hand.removeByReference(meldedCards)
                         shownCards[1]?.addAll(meldedCards)
                         hasShown[1] = true 
-                        
-                        pickMaalCard()
 
-                        val message = if (currentTurnPhase == TurnPhase.DRAW) "Success! Maal revealed. Now draw your card."
-                                     else "Success! Maal revealed. Now discard to finish turn."
-                        
-                        showGameMessage(message)
+                        // Reveal Maal immediately if hand size is exactly 12 (showed from 21 cards)
+                        if (hand.size == 12) {
+                            pickMaalCard()
+                            showGameMessage("Success! Maal revealed.")
+                        } else {
+                            val message = if (currentTurnPhase == TurnPhase.DRAW) "Success! Now draw your card."
+                                         else "Success! Now discard to finish turn and see Maal."
+                            showGameMessage(message)
+                        }
                         
                         if (currentTurnPhase != TurnPhase.DRAW) {
                             currentTurnPhase = TurnPhase.PLAY_OR_DISCARD
@@ -536,12 +561,12 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
                         val cards = jokers.take(3)
                         aiHand.removeByReference(cards)
                         shownCards[myPlayerId]?.addAll(cards)
-                        pickMaalCard()
+                        if (aiHand.size == 18) pickMaalCard()
                     } else if (identical.isNotEmpty()) {
                         val cards = identical.values.first().take(3)
                         aiHand.removeByReference(cards)
                         shownCards[myPlayerId]?.addAll(cards)
-                        pickMaalCard()
+                        if (aiHand.size == 18) pickMaalCard()
                     }
                 }
 
@@ -591,6 +616,14 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
                         val idx = aiHand.indexOfFirst { it === cardToDiscard }
                         if (idx != -1) aiHand.removeAt(idx)
                         discardPile.add(cardToDiscard)
+                        
+                        // AI Reveal Maal check after discard
+                        if (maalCard == null) {
+                            val targetSize = if (isDubliShow[myPlayerId] == true) 7 else if (hasShown[myPlayerId] == true) 12 else if (shownCards[myPlayerId]?.size == 3) 18 else -1
+                            if (targetSize != -1 && aiHand.size == targetSize) {
+                                pickMaalCard()
+                            }
+                        }
                     }
                 }
 
