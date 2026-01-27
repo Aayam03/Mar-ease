@@ -27,47 +27,42 @@ object GameEngine {
 
     /**
      * Identifies if a card is a "Maal" (point card/wildcard type).
-     * In the standard 21-card variant, there are 12 types of derived point cards:
-     * Tiplu (Maal rank in 4 suits), Poplu (+1 rank in 4 suits), Jhiplu (-1 rank in 4 suits).
+     * Rule: All Tiplus (same rank) and point cards (Neighbors/Jokers) act as Jokers.
      */
     fun isMaal(card: Card, maalCard: Card?): Boolean {
         if (card.rank == Rank.JOKER) return true
         val m = maalCard ?: return false
         
-        val v1 = card.rank.value
-        val v2 = m.rank.value
-        
-        // Rule: Tiplu (Same rank), Poplu (Rank + 1), Jhiplu (Rank - 1) in ALL 4 suits are point/wild cards.
-        val isTiplu = v1 == v2
-        val isPoplu = v1 == v2 + 1 || (m.rank == Rank.KING && card.rank == Rank.ACE) || (m.rank == Rank.ACE && card.rank == Rank.TWO)
-        val isJhiplu = v1 == v2 - 1 || (m.rank == Rank.TWO && card.rank == Rank.ACE) || (m.rank == Rank.ACE && card.rank == Rank.KING)
-        
-        return isTiplu || isPoplu || isJhiplu
+        // Acts as Joker if it's a Tiplu (same rank) OR has points (Neighbor)
+        return card.rank == m.rank || getMaalPoints(card, m) > 0
     }
 
     fun getMaalPoints(card: Card, maalCard: Card?): Int {
         val m = maalCard ?: return 0
-        if (card.rank == Rank.JOKER) return 2 // Standard Joker value
+        if (card.rank == Rank.JOKER) return 5 // Updated Standard Joker: 5 Points
         
         val v1 = card.rank.value
         val v2 = m.rank.value
         
-        val isTiplu = v1 == v2
-        val isPoplu = v1 == v2 + 1 || (m.rank == Rank.KING && card.rank == Rank.ACE) || (m.rank == Rank.ACE && card.rank == Rank.TWO)
-        val isJhiplu = v1 == v2 - 1 || (m.rank == Rank.TWO && card.rank == Rank.ACE) || (m.rank == Rank.ACE && card.rank == Rank.KING)
+        val isTiplu = card.rank == m.rank
+        val isNeighbor = card.suit == m.suit && (
+            v1 == v2 + 1 || v1 == v2 - 1 || 
+            (m.rank == Rank.KING && card.rank == Rank.ACE) || (m.rank == Rank.ACE && card.rank == Rank.TWO) ||
+            (m.rank == Rank.TWO && card.rank == Rank.ACE) || (m.rank == Rank.ACE && card.rank == Rank.KING)
+        )
         
         val sameColor = (m.suit == Suit.HEARTS || m.suit == Suit.DIAMONDS) == 
                         (card.suit == Suit.HEARTS || card.suit == Suit.DIAMONDS)
 
         return when {
-            // Tiplu (Main Maal)
-            isTiplu && card.suit == m.suit -> 3
-            // Alter Tiplu (Same Rank, Same Color)
-            isTiplu && sameColor -> 2
-            // Poplu/Jhiplu (Same Suit)
-            (isPoplu || isJhiplu) && card.suit == m.suit -> 2
-            // Alter Poplu/Jhiplu (Same Color)
-            (isPoplu || isJhiplu) && sameColor -> 1
+            // Tiplu (Same suit): 2 Point
+            isTiplu && card.suit == m.suit -> 2
+            // Tiplu (Same color): 3 Points
+            isTiplu && sameColor -> 3
+            // Tiplu (Other color): 0 Point
+            isTiplu -> 0
+            // Poplu/Jhiplu (Same suit): 2 Points
+            isNeighbor -> 2
             else -> 0
         }
     }
@@ -199,8 +194,8 @@ object GameEngine {
             
             var adjustment = 0
             if (player == 1) {
-                val othersMaal = maals.drop(1)
-                val totalOthersMaal = othersMaal.sum()
+                val othersMaal = maals.getOrElse(1) { 0 } // Fallback for safety
+                val totalOthersMaal = maals.drop(1).sum()
                 val baseMaalDiff = totalOthersMaal - (playerCount - 1) * humanMaal
                 
                 explanationBuilder.append("--- Final Calculation for You ---\n")

@@ -155,10 +155,18 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
         }
     }
 
+    /**
+     * Optimized isJoker check to avoid expensive toMap() calls inside loops.
+     */
     fun isJoker(card: Card, player: Int): Boolean {
-        if (isDubliShow[player] == true) return card.rank == Rank.JOKER
-        val visibleMaal = if (hasShown[player] == true) maalCard else null
-        return GameEngine.isJoker(card, player, hasShown.toMap(), visibleMaal)
+        if (card.rank == Rank.JOKER) return true
+        if (isDubliShow[player] == true) return false
+        
+        val playerHasShown = hasShown[player] == true
+        if (!playerHasShown) return false
+        
+        val m = maalCard ?: return false
+        return GameEngine.isMaal(card, m)
     }
     
     fun calculateMaal(player: Int): Int {
