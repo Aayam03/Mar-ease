@@ -1,5 +1,6 @@
 package com.example.card.components
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -49,6 +50,8 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.example.card.GameEngine
 import com.example.card.GameState
+import com.example.card.TurnPhase
+import com.example.card.Rank
 
 @Composable
 fun PauseMenuOverlay(onResume: () -> Unit, onGoBack: () -> Unit, onLearnFromStart: () -> Unit) {
@@ -110,8 +113,14 @@ fun BasicsOverlay(hasShown: Boolean, onDismiss: () -> Unit) {
                 Text("1. Objective", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(16.dp))
                 Text(
-                    "Form valid combination of 3 cards(Melds) with your cards. The ultimate goal is to form 7 melds or 8 pairs (Dubli).",
+                    "Form valid combinations (Melds) with your cards. The ultimate goal is to form 7 melds (for a win) or 8 pairs (Dubli strategy).",
                     style = MaterialTheme.typography.bodyLarge
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    "In this 21-card variant, you start with 21 cards. Every turn you draw one card (making it 22) and must discard one to end your turn.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color.Gray
                 )
             }
         }
@@ -124,19 +133,25 @@ fun BasicsOverlay(hasShown: Boolean, onDismiss: () -> Unit) {
                     "Every turn begins by drawing a card (from Stock or Discard) by tapping on them and ends by discarding a card or clicking SHOW/END TURN.",
                     style = MaterialTheme.typography.bodyLarge
                 )
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    "Note: You can only pick from the Discard pile if the top card helps you complete a meld immediately!",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error
+                )
             }
         }
 
         list.add {
             Column {
-                Text("3. Melds", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Text("3. Melds (Runs & Triples)", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(16.dp))
                 Text(
-                     text = buildString{
-                         append("- Runs: 3+ sequential cards of the same suit (e.g., 5♥, 6♥, 7♥).\n")
-                         append("- Triples: 3 cards of the same rank (different suits OR exact same suit).\n")
-                         append("- Jokers: Can substitute for any card to complete a Run or Triple. Multiple Jokers can even be used together with a single standard card to form a 3-card meld.\n")
-                         append("Note : Only Runs and Triples of the Exact same card can be used for 'show'\n")
+                     text = buildString {
+                         append("• Runs: 3+ sequential cards of the same suit (e.g., 5♥, 6♥, 7♥).\n\n")
+                         append("• Triples: 3 cards of the same rank (e.g., 8♠, 8♦, 8♣).\n\n")
+                         append("• Jokers: Can substitute for any card. Multiple Jokers can be used in a single meld.\n\n")
+                         append("• Pure Melds: For the initial 'Show', melds must be 'Pure' (no jokers unless the joker acts as its original rank/suit).")
                      },
                     style = MaterialTheme.typography.bodyLarge
                 )
@@ -149,9 +164,9 @@ fun BasicsOverlay(hasShown: Boolean, onDismiss: () -> Unit) {
                 Spacer(modifier = Modifier.height(16.dp))
                 Text(
                     "Dubli is a rare but powerful way to play. Instead of forming melds, you form pairs of the exact same card (same rank and same suit).\n\n" +
-                    "- To Show: You need 7 pairs (14 cards total).\n" +
-                    "- To Win: You need 8 pairs (16 cards total).\n" +
-                    "- Joker Rules: In Dubli, printed Jokers can only pair with another printed Joker. Maal-based jokers act as their base card for pairing.",
+                    "• To Show: You need 7 pairs (14 cards total).\n" +
+                    "• To Win: You need 8 pairs (16 cards total).\n" +
+                    "• Joker Rules: In Dubli, printed Jokers can only pair with another printed Joker. Maal-based jokers act as their base card for pairing.",
                     style = MaterialTheme.typography.bodyLarge
                 )
             }
@@ -162,8 +177,9 @@ fun BasicsOverlay(hasShown: Boolean, onDismiss: () -> Unit) {
                 Text("5. Special First Turn Show", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(16.dp))
                 Text(
-                    "If you have 3 Jokers or 3 identical cards (same rank AND same suit) on your very first turn, you can SHOW them immediately for a bonus:\n" +
-                    "- 3 Jokers: +25 Points\n- 3 Identical Cards: +10 Points",
+                    "If you have 3 Jokers or 3 identical cards (same rank AND same suit) on your very first turn, you can SHOW them immediately for a bonus:\n\n" +
+                    "• 3 Jokers: +30 Points (Tunnela)\n" +
+                    "• 3 Identical Cards: +5 Points (Tunnela)",
                     style = MaterialTheme.typography.bodyLarge
                 )
             }
@@ -171,10 +187,13 @@ fun BasicsOverlay(hasShown: Boolean, onDismiss: () -> Unit) {
 
         list.add {
             Column {
-                Text("6. Standard Showing", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Text("6. Initial 'Show' Requirements", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(16.dp))
                 Text(
-                    "Once you have at least 3 valid melds (or 7 pairs for Dubli), you can press SHOW whenever you have 21 or 22 cards in your hand. This reveals the Maal (Special Joker) and earns you points.",
+                    "Before you can see the 'Maal' or use Jokers freely, you must 'Show' your hand by completing:\n\n" +
+                    "• 3 Pure Melds (9 cards total)\n" +
+                    "• OR 7 Pairs (Dubli strategy)\n\n" +
+                    "Once you show, the 'Maal' card is revealed from the stock pile.",
                     style = MaterialTheme.typography.bodyLarge
                 )
             }
@@ -182,10 +201,14 @@ fun BasicsOverlay(hasShown: Boolean, onDismiss: () -> Unit) {
 
         list.add {
             Column {
-                Text("7. Viewing Shown Cards", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Text("7. The Maal (Special Jokers)", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(16.dp))
                 Text(
-                    "When a player has shown their melds, you can view them by clicking the EYE (👁️) icon next to their names. This helps you track which cards are no longer in play.",
+                    "When someone shows, a card is picked as the Maal. That card, and cards related to it, become Jokers for EVERYONE who has shown:\n\n" +
+                    "• Tiplu: Exact match of the Maal card.\n" +
+                    "• Poplu: Rank above Maal (same suit).\n" +
+                    "• Jhiplu: Rank below Maal (same suit).\n" +
+                    "• Alter Cards: Same rank/neighbors but different suits (lower points).",
                     style = MaterialTheme.typography.bodyLarge
                 )
             }
@@ -193,14 +216,14 @@ fun BasicsOverlay(hasShown: Boolean, onDismiss: () -> Unit) {
 
         list.add {
             Column {
-                Text("8. The Maal (Special Joker)", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Text("8. Maal Points & Marriage", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(16.dp))
                 Text(
-                    "When someone shows, a card is picked as the Maal. That card, and cards related to it, become Jokers:\n" +
-                    "- Standard Joker: Always a Joker.\n" +
-                    "- The Maal Card: Exact match of revealed card.\n" +
-                    "- Same Rank: Cards with same rank as Maal.\n" +
-                    "- Neighbors: Cards with same suit as Maal but +/- 1 in rank.",
+                    "You earn points for holding Maal cards in your hand or shown melds:\n\n" +
+                    "• Tiplu: 3 Points\n" +
+                    "• Poplu/Jhiplu: 2 Points\n" +
+                    "• Marriage (Tiplu + Poplu + Jhiplu of same suit): 10 Points!\n\n" +
+                    "Multiple identical cards multiply points (Double = x3, Triple = x5).",
                     style = MaterialTheme.typography.bodyLarge
                 )
             }
@@ -208,14 +231,11 @@ fun BasicsOverlay(hasShown: Boolean, onDismiss: () -> Unit) {
 
         list.add {
             Column {
-                Text("9. Maal Calculation (Points)", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Text("9. Winning & Final Scores", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(16.dp))
                 Text(
-                    "After showing, you gain points for these cards in your hand:\n" +
-                    "- Standard Joker: 5 Points\n" +
-                    "- The Maal Card itself: 3 Points\n" +
-                    "- Same Rank as Maal (Same Color): 5 Points\n" +
-                    "- Neighbors of Maal: 2 Points",
+                    "The game ends when a player completes 7 melds (or 8 pairs) and discards their last card.\n\n" +
+                    "Final scores are calculated by comparing your total Maal points against every other player's total. Winners also get bonuses from players who didn't show!",
                     style = MaterialTheme.typography.bodyLarge
                 )
             }
@@ -223,28 +243,17 @@ fun BasicsOverlay(hasShown: Boolean, onDismiss: () -> Unit) {
 
         list.add {
             Column {
-                Text("10. Winning", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Text("10. Card Highlights", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(16.dp))
-                Text(
-                    "Form 7 melds total (or 8 pairs for Dubli) to win. Your final score depends on your Maal points vs others.",
-                    style = MaterialTheme.typography.bodyLarge
-                )
-            }
-        }
-
-        list.add {
-            Column {
-                Text("11. Card Highlights", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                Spacer(modifier = Modifier.height(16.dp))
-                Text("Cards are highlighted with different colors to help you identify their state:", style = MaterialTheme.typography.bodyLarge)
+                Text("In Learn Mode, we use colors to guide you:", style = MaterialTheme.typography.bodyLarge)
                 Spacer(modifier = Modifier.height(12.dp))
 
                 val highlights = listOf(
-                    Triple(Color.Yellow, "Last Drawn", "The card you just picked up from the Stock or Discard pile."),
-                    Triple(Color(0xFFFF69B4), "Selected", "Cards you've currently tapped for showing or discarding."),
-                    Triple(Color(0xFF4CAF50), "Melded", "Cards that are already part of a valid sequence or set."),
-                    Triple(Color.Cyan, "Maal Joker", "Cards that have become Jokers after the Maal is revealed."),
-                    Triple(Color.Red, "Hint / Warning", "Suggested cards to draw/discard or important alerts.")
+                    Triple(Color.Yellow, "Last Drawn", "The card you just picked up."),
+                    Triple(Color(0xFFFF69B4), "Selected", "Cards you've tapped to show/discard."),
+                    Triple(Color(0xFF4CAF50), "Melded", "Cards forming a valid sequence/set."),
+                    Triple(Color.Cyan, "Maal Joker", "New Jokers after Maal revelation."),
+                    Triple(Color.Red, "Hint / Warning", "Suggested cards or alerts.")
                 )
 
                 highlights.forEach { (color, label, desc) ->
@@ -256,7 +265,7 @@ fun BasicsOverlay(hasShown: Boolean, onDismiss: () -> Unit) {
                             modifier = Modifier
                                 .size(28.dp)
                                 .background(Color.White, RoundedCornerShape(4.dp))
-                                .border(3.dp, color, RoundedCornerShape(4.dp))
+                                .border(BorderStroke(2.dp, color), RoundedCornerShape(4.dp))
                         )
                         Spacer(modifier = Modifier.width(16.dp))
                         Column {
@@ -280,45 +289,52 @@ fun BasicsOverlay(hasShown: Boolean, onDismiss: () -> Unit) {
     ) {
         Card(
             modifier = Modifier
-                .padding(32.dp)
-                .width(500.dp)
-                .heightIn(max = 450.dp)
+                .padding(16.dp)
+                .fillMaxWidth(0.9f)
+                .fillMaxHeight(0.85f)
                 .clickable(enabled = false) { },
-            shape = RoundedCornerShape(16.dp),
+            shape = RoundedCornerShape(24.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
         ) 
         {
             Box(modifier = Modifier.fillMaxSize()) {
                 TextButton(
                     onClick = onDismiss,
-                    modifier = Modifier.align(Alignment.TopEnd).padding(8.dp)
+                    modifier = Modifier.align(Alignment.TopEnd).padding(12.dp)
                 ) {
-                    Text("END", fontSize = 24.sp, fontWeight = FontWeight.ExtraBold, color = Color.Red)
+                    Text("END TUTORIAL", fontSize = 18.sp, fontWeight = FontWeight.ExtraBold, color = Color.Red)
                 }
 
-                Column(modifier = Modifier.padding(24.dp).fillMaxSize(), verticalArrangement = Arrangement.SpaceBetween) {
-                    Box(modifier = Modifier.weight(1f).padding(top = 40.dp).verticalScroll(scrollState)) {
+                Column(modifier = Modifier.padding(32.dp).fillMaxSize(), verticalArrangement = Arrangement.SpaceBetween) {
+                    Box(modifier = Modifier.weight(1f).padding(top = 24.dp).verticalScroll(scrollState)) {
                         pages[currentPage]()
                     }
 
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        TextButton(
-                            onClick = { if (currentPage > 0) currentPage-- },
-                            enabled = currentPage > 0
+                    Column {
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text("Previous", fontSize = 18.sp)
-                        }
-                        
-                        Text("Page ${currentPage + 1} of ${pages.size}", style = MaterialTheme.typography.labelMedium)
+                            TextButton(
+                                onClick = { if (currentPage > 0) currentPage-- },
+                                enabled = currentPage > 0
+                            ) {
+                                Text("Previous", fontSize = 20.sp)
+                            }
+                            
+                            Text(
+                                "Page ${currentPage + 1} of ${pages.size}", 
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
 
-                        TextButton(
-                            onClick = { if (currentPage < pages.size - 1) currentPage++ else onDismiss() }
-                        ) {
-                            Text(if (currentPage < pages.size - 1) "Next" else "Finish", fontSize = 18.sp)
+                            TextButton(
+                                onClick = { if (currentPage < pages.size - 1) currentPage++ else onDismiss() }
+                            ) {
+                                Text(if (currentPage < pages.size - 1) "Next" else "Let's Play!", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                            }
                         }
                     }
                 }
@@ -449,15 +465,16 @@ fun GameEndOverlay(gameState: GameState, navController: NavController) {
                         
                         Card(
                             modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(8.dp),
                             colors = CardDefaults.cardColors(containerColor = Color.Black.copy(alpha = 0.05f)),
-                            border = border(1.dp, Color.Gray.copy(alpha = 0.3f), RoundedCornerShape(8.dp))
+                            border = BorderStroke(1.dp, Color.Gray.copy(alpha = 0.3f))
                         ) {
                             Text(
                                 text = result.explanation, 
                                 modifier = Modifier.padding(12.dp),
                                 style = MaterialTheme.typography.bodyMedium,
                                 lineHeight = 20.sp,
-                                whiteSpace = androidx.compose.ui.text.style.TextOverflow.Visible
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Visible
                             )
                         }
                     }
@@ -534,10 +551,6 @@ fun FlowRow(
         }
     }
 }
-
-private fun Modifier.border(width: androidx.compose.ui.unit.Dp, color: Color, shape: androidx.compose.ui.graphics.Shape) = this.then(
-    Modifier.border(width, color, shape)
-)
 
 @Composable
 fun ShownCardsView(

@@ -86,22 +86,37 @@ class GameViewModel : ViewModel() {
         }
     }
 
+    private var pendingPlayerCount: Int? = null
+
     fun initGame(playerCount: Int, showHints: Boolean) {
         if (gameState == null) {
             val newState = GameState(viewModelScope, showHints)
-            newState.setupGame(playerCount)
             gameState = newState
-            showHelp = showHints
-            hasClosedHelpOnce = !showHints
             explainedHighlights.clear()
             explainedDubliStrategy = false
             showDubliOverlay = false
+            
+            if (showHints) {
+                showHelp = true
+                hasClosedHelpOnce = false
+                pendingPlayerCount = playerCount
+            } else {
+                newState.setupGame(playerCount)
+                showHelp = false
+                hasClosedHelpOnce = true
+            }
         }
     }
 
     fun toggleHelp(show: Boolean) {
         showHelp = show
-        if (!show) hasClosedHelpOnce = true
+        if (!show) {
+            hasClosedHelpOnce = true
+            pendingPlayerCount?.let {
+                gameState?.setupGame(it)
+                pendingPlayerCount = null
+            }
+        }
     }
 
     fun togglePauseMenu(show: Boolean) {

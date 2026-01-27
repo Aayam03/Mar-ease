@@ -293,16 +293,6 @@ fun GameBoardScreen(
                 onHelpClick = { viewModel.toggleHelp(true) }
             )
 
-            OverlayManager(
-                viewModel = viewModel,
-                gameState = gameState,
-                navController = navController,
-                selectedPlayerForShowView = selectedPlayerForShowView,
-                cardHeight = cardHeight,
-                cardWidth = cardWidth,
-                onDismissShowView = { selectedPlayerForShowView = null }
-            )
-
             AnimatedCard(
                 gameState = gameState,
                 stockPilePos = stockPilePos,
@@ -313,6 +303,16 @@ fun GameBoardScreen(
                 cardWidth = cardWidth
             )
         }
+
+        OverlayManager(
+            viewModel = viewModel,
+            gameState = gameState,
+            navController = navController,
+            selectedPlayerForShowView = selectedPlayerForShowView,
+            cardHeight = cardHeight,
+            cardWidth = cardWidth,
+            onDismissShowView = { selectedPlayerForShowView = null }
+        )
     }
 }
 
