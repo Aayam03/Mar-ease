@@ -373,23 +373,50 @@ object AiPlayer {
     fun shouldPickFromDiscard(card: Card, hand: List<Card>, gameState: GameState, player: Int): DrawDecision {
         if (gameState.isJoker(card, player)) return DrawDecision(true, "Always pick a Joker!")
         if (GameEngine.isMaal(card, gameState.maalCard)) return DrawDecision(true, "Pick this Maal card!")
+        
+        // Check if we already have this card in a meld to avoid redundancy
+        val currentMelds = findAllMelds(hand, gameState, player)
+        val isAlreadyMelded = currentMelds.any { meld -> meld.any { it.rank == card.rank && it.suit == card.suit } }
+
         if (hand.any { it.rank == card.rank && it.suit == card.suit }) {
             val countInHand = hand.count { it.rank == card.rank && it.suit == card.suit }
             if (countInHand >= 3 && !isAimingForDubli(player, hand, gameState)) return DrawDecision(false, "Already have a Tunnela.")
+            
+            // If we have 1 or 2 of these cards and they are ALREADY part of a meld, don't draw a duplicate
+            // unless it can form a DIFFERENT meld with other cards.
+            if (isAlreadyMelded && !isAimingForDubli(player, hand, gameState)) {
+                // We'll only consider drawing it if it forms a NEW meld with cards that are NOT part of the existing meld using this rank/suit.
+                // This is a bit complex, so we'll let the loop below handle it by checking pairs.
+            }
         }
+
         if (isAimingForDubli(player, hand, gameState)) {
             return if (isPartOfIdenticalMatch(card, hand)) DrawDecision(true, "Forms a Dubli.") else DrawDecision(false, "No pair for Dubli.")
         }
+
         val hasShown = gameState.hasShown[player] == true
         for (i in 0 until hand.size - 1) {
             val c2 = hand[i]
             if (!isPotentiallyRelated(card, c2, gameState, player)) continue
             for (j in i + 1 until hand.size) {
-                if (hasShown) { if (isValidGeneralMeld(card, c2, hand[j], gameState, player)) return DrawDecision(true, "Completes a meld.") }
-                else { if (isValidInitialMeld(card, c2, hand[j])) return DrawDecision(true, "Forms a pure meld.") }
+                val c3 = hand[j]
+                
+                // Redundancy Check: If c2 and c3 are already melded together with an identical card, skip.
+                val areAlreadyMeldedTogether = currentMelds.any { meld -> 
+                    meld.contains(c2) && meld.contains(c3) && meld.any { it.rank == card.rank && it.suit == card.suit }
+                }
+                if (areAlreadyMeldedTogether) continue
+
+                if (hasShown) { 
+                    if (isValidGeneralMeld(card, c2, c3, gameState, player)) return DrawDecision(true, "Completes a meld.") 
+                } else { 
+                    if (isValidInitialMeld(card, c2, c3)) return DrawDecision(true, "Forms a pure meld.") 
+                }
             }
         }
-        if (findAllMeldedCards(hand, gameState, player).any { it.rank == card.rank && it.suit == card.suit }) return DrawDecision(false, "Already in a meld.")
+
+        if (isAlreadyMelded && !isAimingForDubli(player, hand, gameState)) return DrawDecision(false, "Already in a meld.")
+
         if (isPartOfConsecutiveRun(card, hand, gameState, player)) return DrawDecision(true, "Strong sequence connection.")
         return DrawDecision(false, "Doesn't help form a meld.")
     }
