@@ -78,7 +78,7 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
     val playerIcons = mutableStateMapOf<Int, String>()
     private val availableIcons = listOf("🤖", "👽", "👾", "👺", "👺", "👻")
 
-    var isFirstTurn by mutableStateOf(true)
+    var isFirstTurn = mutableStateMapOf<Int, Boolean>()
         private set
 
     var lastDrawnCard by mutableStateOf<Card?>(null)
@@ -106,11 +106,13 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
                     startingBonuses.clear()
                     meldedCards.clear()
                     selectedCards.clear()
+                    isFirstTurn.clear()
                     
                     for (i in 1..playerCount) {
                         hasShown[i] = false
                         isDubliShow[i] = false
                         shownCards[i] = mutableStateListOf()
+                        isFirstTurn[i] = true
                         
                         // Check for starting Bonuses (Tunnelas)
                         val hand = playerHands[i] ?: emptyList()
@@ -131,7 +133,6 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
                     currentPlayer = Random.nextInt(1, count + 1) 
                     
                     currentTurnPhase = TurnPhase.DRAW
-                    isFirstTurn = true
                     isInitializing = false
                     lastDrawnCard = null
 
@@ -242,7 +243,7 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
                 if (player == 1) {
                     lastDrawnCard = card
                 }
-                isFirstTurn = false 
+                isFirstTurn[player] = false 
                 currentTurnPhase = TurnPhase.PLAY_OR_DISCARD
                 if (player == 1) {
                     updateHint()
@@ -402,11 +403,26 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
         }
     }
 
+    fun humanWinsGame(card: Card) {
+        if (isInitializing || currentPlayer != 1 || currentTurnPhase != TurnPhase.PLAY_OR_DISCARD || winner != null) return
+        val hand = playerHands[1] ?: return
+        
+        if (hand.contains(card)) {
+            moveCard(card, 1, AnimationType.DISCARD, AnimationSource.PLAYER) {
+                val idx = hand.indexOfFirst { it === card }
+                if (idx != -1) hand.removeAt(idx)
+                discardPile.add(card)
+                
+                // Final win check is already inside moveCard -> handlePostDiscard -> checkWin
+            }
+        }
+    }
+
     fun humanShows() {
         if (isInitializing || currentPlayer != 1) return
         val hand = playerHands[1] ?: return
         val alreadyShownCount = shownCards[1]?.size ?: 0
-        val isFirstHandBeforeDraw = isFirstTurn && currentTurnPhase == TurnPhase.DRAW
+        val isFirstHandBeforeDraw = isFirstTurn[1] == true && currentTurnPhase == TurnPhase.DRAW
 
         // Check for Dubli Show - only if nothing shown yet
         if (hasShown[1] == false && alreadyShownCount == 0 && selectedCards.size == 14) {
@@ -553,7 +569,7 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
         viewModelScope.launch {
             val aiHand = playerHands[myPlayerId] ?: return@launch
             try {
-                if (isFirstTurn && currentPlayer == myPlayerId && currentTurnPhase == TurnPhase.DRAW) {
+                if (isFirstTurn[myPlayerId] == true && currentPlayer == myPlayerId && currentTurnPhase == TurnPhase.DRAW) {
                     val jokers = aiHand.filter { it.rank == Rank.JOKER }
                     val identical = aiHand.groupBy { it.rank to it.suit }.filter { it.value.size >= 3 }
                     
@@ -641,7 +657,7 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
         }
         val humanHand = playerHands[1]?.toList() ?: return
         val alreadyShownCount = shownCards[1]?.size ?: 0
-        val isFirstHandBeforeDraw = isFirstTurn && currentTurnPhase == TurnPhase.DRAW
+        val isFirstHandBeforeDraw = isFirstTurn[1] == true && currentTurnPhase == TurnPhase.DRAW
         
         viewModelScope.launch {
             val mCards = withContext(Dispatchers.Default) { AiPlayer.findAllMeldedCards(humanHand, this@GameState, 1) }
@@ -666,7 +682,13 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
                         }
                     }
                     TurnPhase.PLAY_OR_DISCARD -> {
-                        if (hasShown[1] == false) {
+                        val winCard = humanHand.find { card ->
+                            AiPlayer.canFinish(humanHand.filter { it !== card }, this@GameState, 1)
+                        }
+
+                        if (winCard != null) {
+                            hint = Hint(title = "Victory is Near!", message = "Discard ${winCard.rank.symbol}${winCard.suit.symbol} to WIN the game!", cards = listOf(winCard))
+                        } else if (hasShown[1] == false) {
                             val hand = playerHands[1]?.toList() ?: emptyList()
                             val dublis = AiPlayer.findDublis(hand)
                             
@@ -699,8 +721,8 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
                             hint = Hint(title = "Final Step", message = "Discard ${decision.card.rank.symbol} to reveal the Maal and end your turn.", cards = listOf(decision.card))
                         } else {
                             val decision = withContext(Dispatchers.Default) { AiPlayer.findCardToDiscard(humanHand, this@GameState, 1) }
-                            val title = if (isFirstTurn) "Next Step" else "Strategic Discard"
-                            val msg = if (isFirstTurn) "Now discard ${decision.card.rank.symbol} to end your turn and finalize your show." else decision.reason
+                            val title = if (isFirstTurn[1] == true) "Next Step" else "Strategic Discard"
+                            val msg = if (isFirstTurn[1] == true) "Now discard ${decision.card.rank.symbol} to end your turn and finalize your show." else decision.reason
                             hint = Hint(title = title, message = msg, cards = listOf(decision.card))
                         }
                     }

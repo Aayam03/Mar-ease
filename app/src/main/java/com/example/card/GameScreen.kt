@@ -383,8 +383,18 @@ fun ActionButtons(gameState: GameState) {
             }
             
             if (gameState.currentTurnPhase == TurnPhase.PLAY_OR_DISCARD && gameState.selectedCards.size == 1) {
-                Button(onClick = { gameState.humanDiscardsCard(gameState.selectedCards.first()) }) {
-                    Text("DISCARD", fontWeight = FontWeight.Bold)
+                val selected = gameState.selectedCards.first()
+                val hand = gameState.playerHands[1]?.toList() ?: emptyList()
+                val canWin = AiPlayer.canFinish(hand.filter { it !== selected }, gameState, 1)
+
+                Button(onClick = { 
+                    if (canWin) {
+                        gameState.humanWinsGame(selected)
+                    } else {
+                        gameState.humanDiscardsCard(selected)
+                    }
+                }) {
+                    Text(if (canWin) "WIN" else "DISCARD", fontWeight = FontWeight.Bold)
                 }
             }
 
