@@ -125,15 +125,15 @@ object GameEngine {
                 // Multiplier logic for multiple identical maal cards
                 val totalPoints = when (count) {
                     1 -> basePoints
-                    2 -> basePoints * 3 // Bonus for double
-                    3 -> basePoints * 5 // Large bonus for triple
+                    2 -> basePoints * 1.5.toInt() // Bonus for double
+                    3 -> basePoints * 2 // Large bonus for triple
                     else -> basePoints * count * 2
                 }
                 
                 val label = when (count) {
                     1 -> "Single"
-                    2 -> "Double (x3)"
-                    3 -> "Triple (x5)"
+                    2 -> "Double (x1.5)"
+                    3 -> "Triple (x2)"
                     else -> "Multiple"
                 }
                 
@@ -187,10 +187,10 @@ object GameEngine {
             var adjustment = 0
             if (player == 1) {
                 val totalOthersMaal = maals.drop(1).sum()
-                val baseMaalDiff = totalOthersMaal - (playerCount - 1) * humanMaal
+                val baseMaalDiff = totalOthersMaal - (playerCount ) * humanMaal
                 
                 explanationBuilder.append("--- Final Calculation for You ---\n")
-                explanationBuilder.append("Maal Difference: $totalOthersMaal (Others) - (${playerCount - 1} × $humanMaal) (Yours) = $baseMaalDiff\n")
+                explanationBuilder.append("Maal Difference: $totalOthersMaal (Others) - (${playerCount } × $humanMaal) (Yours) = $baseMaalDiff\n")
                 
                 val bonusExplanation = StringBuilder()
                 val winnerAdjustment = if (winner == 1) {
