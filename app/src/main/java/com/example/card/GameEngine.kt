@@ -186,42 +186,58 @@ object GameEngine {
             
             var adjustment = 0
             if (player == 1) {
-                val totalOthersMaal = maals.drop(1).sum()
-                val baseMaalDiff = totalOthersMaal - (playerCount ) * humanMaal
+                // Formula: (Count of others * Your Maal) - (Sum of others' Maal)
+                val totalOthersMaal = maals.filterIndexed { i, _ -> i != 0 }.sum()
+                val othersCount = playerCount - 1
+                val baseMaalDiff = (othersCount * humanMaal) - totalOthersMaal
                 
                 explanationBuilder.append("--- Final Calculation for You ---\n")
-                explanationBuilder.append("Maal Difference: $totalOthersMaal (Others) - (${playerCount } × $humanMaal) (Yours) = $baseMaalDiff\n")
+                explanationBuilder.append("Maal Difference: ($othersCount × $humanMaal) (Yours) - $totalOthersMaal (Others) = $baseMaalDiff\n")
                 
                 val bonusExplanation = StringBuilder()
+                
+                // winnerAdjustment represents the net gain/loss from win/loss bonuses
                 val winnerAdjustment = if (winner == 1) {
-                    var collect = 0
+                    // You won: You COLLECT points from everyone else
+                    var totalCollected = 0
                     for (p in 2..playerCount) {
                         val isWinnerDubli = isDubliShow[1] == true
                         val winBase = if (isWinnerDubli) 5 else 3
                         val loseNoShowBase = if (isWinnerDubli) 15 else 10
                         
-                        val points = if (hasShown[p] == true) winBase else loseNoShowBase
+                        val pointsToCollect = if (hasShown[p] == true) winBase else loseNoShowBase
                         val reason = if (hasShown[p] == true) "showed" else "didn't show"
-                        bonusExplanation.append("Player $p gave $points because they $reason.\n")
-                        collect += points
+                        bonusExplanation.append("Collected $pointsToCollect from Player $p (they $reason).\n")
+                        totalCollected += pointsToCollect
                     }
-                    -collect
+                    totalCollected // Positive because you are receiving these points
                 } else {
+                    // You lost: You PAY points to the winner
                     val isWinnerDubli = isDubliShow[winner] == true
-                    if (hasShown[1] == true) {
-                        val points = if (isDubliShow[1] == true) 0 else 3
-                        bonusExplanation.append("You gave $points to Player $winner because you showed.\n")
-                        points
+                    val pointsToPay = if (hasShown[1] == true) {
+                        // If you showed, you pay 3 (or 0 if you also have Dubli)
+                        if (isDubliShow[1] == true) 0 else 3
                     } else {
-                        val points = if (isWinnerDubli) 15 else 10
-                        bonusExplanation.append("You gave $points to Player $winner because you didn't show.\n")
-                        points
+                        // If you didn't show, you pay 10 (or 15 if winner has Dubli)
+                        if (isWinnerDubli) 15 else 10
                     }
+                    
+                    val reason = if (hasShown[1] == true) "you showed" else "you didn't show"
+                    bonusExplanation.append("Paid $pointsToPay to Player $winner because $reason.\n")
+                    -pointsToPay // Negative because you are losing these points
                 }
                 
                 explanationBuilder.append("Win/Loss Bonus:\n$bonusExplanation")
+                
+                // FINAL FORMULA: Maal Difference + Net Win/Loss Bonus
                 adjustment = baseMaalDiff + winnerAdjustment
-                explanationBuilder.append("Total Adjustment: $baseMaalDiff + ($winnerAdjustment) = $adjustment")
+                explanationBuilder.append("Total Adjustment: $baseMaalDiff + ($winnerAdjustment) = $adjustment\n")
+                
+                val finalResultLabel = if (adjustment >= 0) "WON" else "LOST"
+                val absAdjustment = if (adjustment >= 0) adjustment else -adjustment
+                explanationBuilder.append("\n--------------------------------")
+                explanationBuilder.append("\n>>> YOU $finalResultLabel $absAdjustment POINTS <<<")
+                explanationBuilder.append("\n--------------------------------\n")
             }
 
             PlayerScoreResult(
@@ -247,7 +263,7 @@ object GameEngine {
         isDubliShow: Map<Int, Boolean> = emptyMap(),
         startingBonuses: Map<Int, Int> = emptyMap()
     ): Int {
-        return getGameResult(winner, playerCount, playerHands, shownCards, hasShown, maalCard, isDubliShow, startingBonuses).playerResults[0].adjustment
+        return getGameResult(winner, playerCount, playerHands, some shownCards, hasShown, maalCard, isDubliShow, startingBonuses).playerResults[0].adjustment
     }
 
     fun getFinalScoreReason(
