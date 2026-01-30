@@ -222,7 +222,11 @@ object GameEngine {
                         if (isWinnerDubli) 15 else 10
                     }
                     
-                    val reason = if (hasShown[1] == true) "you showed" else "you didn't show"
+                    val reason = if (hasShown[1] == true) {
+                        if (isDubliShow[1] == true && pointsToPay == 0) "you showed and had Dubli" else "you showed"
+                    } else {
+                        "you didn't show"
+                    }
                     bonusExplanation.append("Paid $pointsToPay to Player $winner because $reason.\n")
                     -pointsToPay // Negative because you are losing these points
                 }
@@ -263,7 +267,7 @@ object GameEngine {
         isDubliShow: Map<Int, Boolean> = emptyMap(),
         startingBonuses: Map<Int, Int> = emptyMap()
     ): Int {
-        return getGameResult(winner, playerCount, playerHands, some shownCards, hasShown, maalCard, isDubliShow, startingBonuses).playerResults[0].adjustment
+        return getGameResult(winner, playerCount, playerHands, shownCards, hasShown, maalCard, isDubliShow, startingBonuses).playerResults[0].adjustment
     }
 
     fun getFinalScoreReason(
