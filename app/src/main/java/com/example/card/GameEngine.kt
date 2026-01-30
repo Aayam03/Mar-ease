@@ -282,4 +282,11 @@ object GameEngine {
     ): String {
         return getGameResult(winner, playerCount, playerHands, shownCards, hasShown, maalCard, isDubliShow, startingBonuses).explanation
     }
+
+    /**
+     * Strategic helper: Returns all cards sharing the minimum importance score.
+     */
+    fun getSuggestedDiscards(hand: List<Card>, gameState: GameState, player: Int): List<Card> {
+        return AiPlayer.findBestDiscardOptions(hand, gameState, player)
+    }
 }

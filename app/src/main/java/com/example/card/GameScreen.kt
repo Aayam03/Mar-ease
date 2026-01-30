@@ -386,13 +386,6 @@ fun ActionButtons(gameState: GameState) {
                     Text("SHOW", fontWeight = FontWeight.Bold)
                 }
             }
-
-            // PROCEED button for INITIAL_CHECK
-            if (gameState.currentTurnPhase == TurnPhase.INITIAL_CHECK) {
-                Button(onClick = { gameState.humanEndsInitialCheck() }) {
-                    Text("PROCEED", fontWeight = FontWeight.Bold)
-                }
-            }
             
             // DISCARD/WIN button logic
             if (gameState.currentTurnPhase == TurnPhase.PLAY_OR_DISCARD && gameState.selectedCards.size == 1) {
@@ -404,7 +397,7 @@ fun ActionButtons(gameState: GameState) {
                     if (canWin) {
                         gameState.humanWinsGame(selected)
                     } else {
-                        gameState.humanDiscardsCard(selected)
+                        gameState.requestDiscardSelection() 
                     }
                 }) {
                     Text(if (canWin) "WIN" else "DISCARD", fontWeight = FontWeight.Bold)
@@ -482,6 +475,17 @@ fun OverlayManager(
                 gameState.setupGame(gameState.playerCount)
                 viewModel.togglePauseMenu(false)
             }
+        )
+    }
+
+    if (viewModel.showDiscardSelection) {
+        SelectionDialog(
+            candidates = viewModel.discardCandidates,
+            onSelected = { card -> 
+                gameState.humanDiscardsCard(card)
+                viewModel.closeDiscardSelection()
+            },
+            onDismiss = { viewModel.closeDiscardSelection() }
         )
     }
 

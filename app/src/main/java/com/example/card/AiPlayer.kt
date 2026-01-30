@@ -345,20 +345,19 @@ object AiPlayer {
                 card to 10000.0 
             } else {
                 val potential = calculateCardPotential(card, hand, gameState, player, analysis)
-                // Tie-breaker: Prefer discarding high-value cards (Ace=14, etc.) if they have same potential.
-                // Worthless cards (potential 0) will be sorted by rank value.
-                // Subtract a fraction of rank value from potential to make higher ranks slightly more discardable.
-                val score = potential.toDouble() + (1.0 - (card.rank.value.toDouble() / 20.0))
-                card to score
+                card to potential.toDouble()
             }
         }
-        val sorted = scores.sortedBy { it.second }
-        return sorted.map { it.first }
+        val minScore = scores.minOf { it.second }
+        // Return ALL cards that have this minimum score (ties)
+        return scores.filter { it.second == minScore }.map { it.first }
     }
 
     fun findCardToDiscard(hand: List<Card>, gameState: GameState, player: Int): DiscardDecision {
         val options = findBestDiscardOptions(hand, gameState, player)
-        val bestCard = options.first()
+        // Pick one (prefer higher rank if tie)
+        val bestCard = options.maxByOrNull { it.rank.value } ?: options.first()
+
         if (gameState.isJoker(bestCard, player) && gameState.isDubliShow[player] != true) return DiscardDecision(bestCard, "Error: AI tried to discard a Joker.")
         val hasShown = gameState.hasShown[player] == true
         val analysis = analyzeHand(hand, gameState, player)

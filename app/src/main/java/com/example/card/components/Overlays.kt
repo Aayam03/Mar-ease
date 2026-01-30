@@ -48,6 +48,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import com.example.card.Card
 import com.example.card.GameEngine
 import com.example.card.GameState
 import com.example.card.TurnPhase
@@ -375,6 +376,53 @@ fun DubliStrategyOverlay(onDismiss: () -> Unit) {
                     Button(onClick = onDismiss) {
                         Text("I'll try it!")
                     }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun SelectionDialog(
+    candidates: List<com.example.card.Card>, 
+    onSelected: (com.example.card.Card) -> Unit, 
+    onDismiss: () -> Unit
+) {
+    Box(
+        modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.7f)).clickable { onDismiss() },
+        contentAlignment = Alignment.Center
+    ) {
+        Card(
+            modifier = Modifier.padding(32.dp).width(500.dp).heightIn(max = 450.dp).clickable(enabled = false) { },
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        ) {
+            Column(modifier = Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("Select a card to Discard", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    "All of these cards are equally 'worthless' for your hand. Please choose which one to discard.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    textAlign = TextAlign.Center
+                )
+                Spacer(modifier = Modifier.height(24.dp))
+                
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(4),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.weight(1f, fill = false)
+                ) {
+                    items(candidates) { card ->
+                        Box(modifier = Modifier.size(60.dp, 90.dp).clickable { onSelected(card) }) {
+                            CardView(card = card, faceUp = true)
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+                OutlinedButton(onClick = onDismiss) {
+                    Text("Cancel")
                 }
             }
         }

@@ -88,6 +88,12 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
     var lastDrawnCard by mutableStateOf<Card?>(null)
         private set
 
+    // To prevent AI loops
+    val lastDiscardedCardIdByPlayer = mutableStateMapOf<Int, String?>()
+
+    // Callback to open selection dialog in UI
+    var onShowDiscardSelection: ((List<Card>) -> Unit)? = null
+
     fun setupGame(count: Int) {
         viewModelScope.launch {
             isInitializing = true
@@ -112,12 +118,14 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
                     dubliCards.clear()
                     selectedCards.clear()
                     isFirstTurn.clear()
+                    lastDiscardedCardIdByPlayer.clear()
                     
                     for (i in 1..playerCount) {
                         hasShown[i] = false
                         isDubliShow[i] = false
                         shownCards[i] = mutableStateListOf()
                         isFirstTurn[i] = true
+                        lastDiscardedCardIdByPlayer[i] = null
                         
                         val hand = playerHands[i] ?: emptyList()
                         val tunnelas = hand.groupBy { it.rank to it.suit }.filter { it.value.size >= 3 }
@@ -241,6 +249,7 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
                 if (player == 1) updateHint()
             } else {
                 if (player == 1) lastDrawnCard = null
+                lastDiscardedCardIdByPlayer[player] = card.id
                 handlePostDiscard(player)
             }
         }
@@ -509,7 +518,9 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
                 val aiHandList = aiHand.toList()
                 if (cardFromDiscard != null) {
                     val decision = withContext(Dispatchers.Default) { AiPlayer.shouldPickFromDiscard(cardFromDiscard, aiHandList, this@GameState, myPlayerId) }
-                    if (decision.shouldPick) {
+                    // Extra loop prevention: Don't pick if you just discarded it last turn.
+                    val wasLastDiscarded = lastDiscardedCardIdByPlayer[myPlayerId] == cardFromDiscard.id
+                    if (decision.shouldPick && !wasLastDiscarded) {
                         val card = discardPile.last()
                         moveCard(card, myPlayerId, AnimationType.DRAW, AnimationSource.DISCARD) {
                             discardPile.removeAt(discardPile.lastIndex)
@@ -611,13 +622,11 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
                                 if (possibleInitial.size >= reqMelds) {
                                     hint = Hint(title = "Ready to Show", message = "Select ${reqMelds * 3} cards and SHOW.", cards = possibleInitial.take(reqMelds).flatten())
                                 } else {
-                                    val decision = withContext(Dispatchers.Default) { AiPlayer.findCardToDiscard(humanHand, this@GameState, 1) }
-                                    hint = Hint(title = "Discard", message = decision.reason, cards = listOf(decision.card))
+                                    provideDiscardHint(humanHand)
                                 }
                             }
                         } else {
-                            val decision = withContext(Dispatchers.Default) { AiPlayer.findCardToDiscard(humanHand, this@GameState, 1) }
-                            hint = Hint(title = "Discard", message = decision.reason, cards = listOf(decision.card))
+                            provideDiscardHint(humanHand)
                         }
                     }
                     TurnPhase.SHOW_OR_END -> {
@@ -634,6 +643,30 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
                         }
                     }
                     else -> hint = null
+                }
+            }
+        }
+    }
+
+    private suspend fun provideDiscardHint(humanHand: List<Card>) {
+        val suggested = withContext(Dispatchers.Default) { GameEngine.getSuggestedDiscards(humanHand, this@GameState, 1) }
+        if (suggested.size > 1) {
+            hint = Hint(title = "Discard Options", message = "Multiple cards are equally worthless. Tap the DISCARD button to choose.", cards = suggested)
+        } else {
+            val decision = withContext(Dispatchers.Default) { AiPlayer.findCardToDiscard(humanHand, this@GameState, 1) }
+            hint = Hint(title = "Discard", message = decision.reason, cards = listOf(decision.card))
+        }
+    }
+
+    fun requestDiscardSelection() {
+        val hand = playerHands[1]?.toList() ?: return
+        viewModelScope.launch {
+            val suggested = withContext(Dispatchers.Default) { GameEngine.getSuggestedDiscards(hand, this@GameState, 1) }
+            withContext(Dispatchers.Main) {
+                if (suggested.size > 1) {
+                    onShowDiscardSelection?.invoke(suggested)
+                } else if (suggested.isNotEmpty()) {
+                    humanDiscardsCard(suggested.first())
                 }
             }
         }
