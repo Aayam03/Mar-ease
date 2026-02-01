@@ -22,11 +22,6 @@ data class GameResult(
 )
 
 object GameEngine {
-
-    /**
-     * Identifies if a card is a "Maal" (point card/wildcard type).
-     * Rule: All Tiplus (same rank) and point cards (Neighbors/Jokers) act as Jokers.
-     */
     fun isMaal(card: Card, maalCard: Card?): Boolean {
         if (card.rank == Rank.JOKER) return true
         val m = maalCard ?: return false
