@@ -234,9 +234,9 @@ object GameEngine {
                 
                 val finalResultLabel = if (adjustment >= 0) "WON" else "LOST"
                 val absAdjustment = if (adjustment >= 0) adjustment else -adjustment
-                explanationBuilder.append("\n--------------------------------")
+                explanationBuilder.append("\n------------------------------")
                 explanationBuilder.append("\n>>> YOU $finalResultLabel $absAdjustment POINTS <<<")
-                explanationBuilder.append("\n--------------------------------\n")
+                explanationBuilder.append("\n------------------------------\n")
             }
 
             PlayerScoreResult(
