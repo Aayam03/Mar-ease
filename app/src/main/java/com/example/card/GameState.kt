@@ -88,17 +88,21 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
     var lastDrawnCard by mutableStateOf<Card?>(null)
         private set
 
+    // AI Difficulty
+    var difficulty by mutableStateOf(Difficulty.HARD)
+
     // To prevent AI loops
     val lastDiscardedCardIdByPlayer = mutableStateMapOf<Int, String?>()
 
     // Callback to open selection dialog in UI
     var onShowDiscardSelection: ((List<Card>) -> Unit)? = null
 
-    fun setupGame(count: Int) {
+    fun setupGame(count: Int, difficulty: Difficulty = Difficulty.HARD) {
         viewModelScope.launch {
             isInitializing = true
             withContext(Dispatchers.Default) {
                 this@GameState.playerCount = count
+                this@GameState.difficulty = difficulty
                 val numberOfDecks = when (playerCount) {
                     in 2..4 -> 3
                     5 -> 4

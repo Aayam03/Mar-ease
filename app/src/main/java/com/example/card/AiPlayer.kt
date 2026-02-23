@@ -2,6 +2,7 @@ package com.example.card
 
 import java.util.BitSet
 import kotlin.math.abs
+import kotlin.random.Random
 
 data class DiscardDecision(val card: Card, val reason: String)
 data class DrawDecision(val shouldPick: Boolean, val reason: String)
@@ -21,7 +22,7 @@ data class HandAnalysis(
 object AiPlayer {
 
     /**
-     * Strategic check: Only prioritize Dubli if we have 5+ pairs and very few regular melds.
+     * Strategic check: Only prioritize Dubli if we have a very strong start for it.
      */
     fun isAimingForDubli(player: Int, hand: List<Card>, gameState: GameState): Boolean {
         if (gameState.hasShown[player] == true && gameState.isDubliShow[player] != true) return false
@@ -30,8 +31,8 @@ object AiPlayer {
         val dublis = findDublis(hand)
         val initialMelds = findAllInitialMelds(hand)
         
-        // Refined: Only aim for Dubli if 5+ pairs AND 1 or 0 melds found.
-        return dublis.size >= 5 && initialMelds.size <= 1
+        // Increased threshold: Need 6+ pairs AND absolutely no regular melds to commit.
+        return dublis.size >= 6 && initialMelds.isEmpty()
     }
 
     fun findDublis(hand: List<Card>): List<List<Card>> {
@@ -115,6 +116,7 @@ object AiPlayer {
 
     private fun findSingleInitialTriple(cards: List<Card>): List<Card>? {
         val nonJokers = cards.filter { it.rank != Rank.JOKER }
+        // Identical triples only (same rank and suit) for pure show
         val identicalGroup = nonJokers.groupBy { it.rank to it.suit }.values.firstOrNull { it.size >= 3 }
         return identicalGroup?.take(3)
     }
@@ -233,15 +235,6 @@ object AiPlayer {
         return false
     }
 
-    fun isValidGeneralMeld(cards: List<Card>, gameState: GameState, player: Int, ignoreShownStatus: Boolean = false): Boolean {
-        if (cards.size == 3) return isValidGeneralMeld(cards[0], cards[1], cards[2], gameState, player, ignoreShownStatus)
-        if (cards.size != 2) return false
-        val hasShown = gameState.hasShown[player] == true || ignoreShownStatus
-        val jokers = cards.filter { gameState.isJoker(it, player) }
-        if (jokers.isNotEmpty() && !hasShown) return false
-        return jokers.size == 2
-    }
-
     internal fun isValidInitialMeld(c1: Card, c2: Card, c3: Card): Boolean {
         if (c1.rank == Rank.JOKER || c2.rank == Rank.JOKER || c3.rank == Rank.JOKER) return false
         if (c1.rank == c2.rank && c1.suit == c2.suit && c2.rank == c3.rank && c2.suit == c3.suit) return true
@@ -276,17 +269,28 @@ object AiPlayer {
         return HandAnalysis(meldedIds, consecutiveRunIds, gapRunIds, identicalMatchIds, pairIds, extensionIds)
     }
 
-    fun calculateCardPotential(card: Card, hand: List<Card>, gameState: GameState, player: Int, analysis: HandAnalysis): Int {
+    fun calculateCardPotential(card: Card, hand: List<Card>, gameState: GameState, player: Int, analysis: HandAnalysis, isAimingForDubli: Boolean = false): Int {
         if (gameState.isJoker(card, player)) return 1000
         if (GameEngine.isMaal(card, gameState.maalCard)) return 800
         
         val isIdentical = analysis.identicalMatchIds.contains(card.id)
-        val dubliScore = if (isIdentical) 500 else 0
-        
         val meldScore = calculateMeldPotential(card, hand, gameState, player, analysis)
         
-        // Return the highest potential found. Lone cards will have 0 here.
-        return maxOf(meldScore, dubliScore)
+        val pairsCount = hand.groupBy { it.rank to it.suit }.filter { it.value.size >= 2 }.size
+        
+        // Pair logic: Value increases as we get closer to Dubli show/win.
+        // Summing scores allows hybrid play: cards good for both melds and pairs are highly valued.
+        val pairScore = if (isIdentical) {
+            val base = if (isAimingForDubli) 500 else 0
+            base + when {
+                pairsCount >= 7 -> 750 // Priority over melds when close to finish
+                pairsCount >= 5 -> 450 // Strong priority
+                pairsCount >= 3 -> 250 // Competitive with melds
+                else -> 80 // Weak interest in pairs
+            }
+        } else 0
+        
+        return meldScore + pairScore
     }
 
     private fun calculateMeldPotential(card: Card, hand: List<Card>, gameState: GameState, player: Int, analysis: HandAnalysis): Int {
@@ -301,7 +305,8 @@ object AiPlayer {
         val sameRankOthers = hand.filter { !it.isSameInstance(card) && it.rank == card.rank && it.suit != card.suit && !gameState.isJoker(it, player) }
         val triplePotential = if (sameRankOthers.isNotEmpty()) {
             val uniqueSuitsCount = (sameRankOthers + card).distinctBy { it.suit }.size
-            if (hasShown) (if (uniqueSuitsCount >= 3) 85 else 80) else (if (uniqueSuitsCount >= 3) 60 else 50)
+            // Standard triples (mixed suit) only count after show
+            if (hasShown) (if (uniqueSuitsCount >= 3) 85 else 80) else 0
         } else 0
         return maxOf(suitScore, triplePotential)
     }
@@ -336,7 +341,19 @@ object AiPlayer {
         return othersList.any { !it.isSameInstance(card) && !gameState.isJoker(it, player) && it.rank == card.rank }
     }
 
-    fun findBestDiscardOptions(hand: List<Card>, gameState: GameState, player: Int): List<Card> {
+    fun isDead(card: Card, gameState: GameState): Boolean {
+        if (card.rank == Rank.JOKER) return false
+        val numberOfDecks = when (gameState.playerCount) {
+            in 2..4 -> 3
+            5 -> 4
+            else -> 5
+        }
+        val seenCount = gameState.discardPile.count { it.rank == card.rank && it.suit == card.suit } +
+                        gameState.shownCards.values.sumOf { sc -> sc.count { it.rank == card.rank && it.suit == card.suit } }
+        return seenCount >= numberOfDecks - 1
+    }
+
+    fun findBestDiscardOptions(hand: List<Card>, gameState: GameState, player: Int, isAimingForDubli: Boolean = false): List<Card> {
         val nonJokers = hand.filter { !gameState.isJoker(it, player) }
         if (nonJokers.isEmpty()) return listOf(hand.first())
         val analysis = analyzeHand(hand, gameState, player)
@@ -344,24 +361,47 @@ object AiPlayer {
             if (analysis.meldedIds.contains(card.id)) {
                 card to 10000.0 
             } else {
-                val potential = calculateCardPotential(card, hand, gameState, player, analysis)
-                card to potential.toDouble()
+                var potential = calculateCardPotential(card, hand, gameState, player, analysis, isAimingForDubli).toDouble()
+                
+                // Memory logic for Hard Mode (and Learn Mode hints)
+                if (isDead(card, gameState)) {
+                    potential -= 50.0 // Make it highly attractive to discard
+                }
+                
+                card to potential
             }
         }
         val minScore = scores.minOf { it.second }
-        // Return ALL cards that have this minimum score (ties)
         return scores.filter { it.second == minScore }.map { it.first }
     }
 
     fun findCardToDiscard(hand: List<Card>, gameState: GameState, player: Int): DiscardDecision {
-        val options = findBestDiscardOptions(hand, gameState, player)
-        // Pick one (prefer higher rank if tie)
-        val bestCard = options.maxByOrNull { it.rank.value } ?: options.first()
-
+        val aimingForDubli = isAimingForDubli(player, hand, gameState)
+        val options = findBestDiscardOptions(hand, gameState, player, aimingForDubli)
+        
+        // Difficulty Logic for Discard:
+        val bestCard = when (gameState.difficulty) {
+            Difficulty.EASY -> {
+                // Easy: 50% chance to just pick a random non-joker card
+                if (Random.nextFloat() < 0.5f) hand.filter { !gameState.isJoker(it, player) }.randomOrNull() ?: options.first()
+                else options.random()
+            }
+            Difficulty.MEDIUM -> {
+                // Medium: Pick from options but with less optimal tie-breaking
+                options.random()
+            }
+            Difficulty.HARD -> {
+                // Hard: Pick highest rank among best options (standard logic)
+                options.maxByOrNull { it.rank.value } ?: options.first()
+            }
+        }
+        
         if (gameState.isJoker(bestCard, player) && gameState.isDubliShow[player] != true) return DiscardDecision(bestCard, "Error: AI tried to discard a Joker.")
         val hasShown = gameState.hasShown[player] == true
         val analysis = analyzeHand(hand, gameState, player)
+        val isDeadCard = isDead(bestCard, gameState)
         val reason = when {
+            isDeadCard -> "Discarding ${bestCard.rank.symbol}${bestCard.suit.symbol} because it is 'Dead' (all other copies are out)."
             GameEngine.isMaal(bestCard, gameState.maalCard) -> "Discarding ${bestCard.rank.symbol}${bestCard.suit.symbol} (Maal)."
             !hasShown && findAllInitialMelds(hand).size >= 3 -> "Discarding ${bestCard.rank.symbol}${bestCard.suit.symbol} to protect your melds."
             analysis.meldedIds.contains(bestCard.id) -> "Discarding ${bestCard.rank.symbol}${bestCard.suit.symbol} from a meld."
@@ -375,9 +415,18 @@ object AiPlayer {
     }
 
     fun shouldPickFromDiscard(card: Card, hand: List<Card>, gameState: GameState, player: Int): DrawDecision {
+        // Always pick Jokers/Maal regardless of difficulty (essential rules)
         if (gameState.isJoker(card, player)) return DrawDecision(true, "Always pick a Joker!")
         if (GameEngine.isMaal(card, gameState.maalCard)) return DrawDecision(true, "Pick this Maal card!")
         
+        // Difficulty Logic for Drawing:
+        if (gameState.difficulty == Difficulty.EASY && Random.nextFloat() < 0.6f) {
+            return DrawDecision(false, "Easy AI missed an opportunity.")
+        }
+        if (gameState.difficulty == Difficulty.MEDIUM && Random.nextFloat() < 0.2f) {
+            return DrawDecision(false, "Medium AI missed an opportunity.")
+        }
+
         val currentMelds = findAllMelds(hand, gameState, player)
         val isAlreadyMelded = currentMelds.any { meld -> meld.any { it.rank == card.rank && it.suit == card.suit } }
 
@@ -412,7 +461,7 @@ object AiPlayer {
 
         if (isAlreadyMelded && !isAimingForDubli(player, hand, gameState)) return DrawDecision(false, "Already in a meld.")
         if (isPartOfConsecutiveRun(card, hand, gameState, player)) return DrawDecision(true, "Strong sequence connection.")
-        return DrawDecision(false, "Draw from stock to find cards for your required melds.")
+        return DrawDecision(false, "Draw from stock.")
     }
 
     private fun findAnyMeldGreedyIndices(cards: List<Card>, used: BitSet, gameState: GameState, player: Int, ignoreShownStatus: Boolean): List<Int>? {

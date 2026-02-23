@@ -30,6 +30,11 @@ object GameEngine {
         return card.rank == m.rank || getMaalPoints(card, m) > 0
     }
 
+    private fun isSameColor(s1: Suit, s2: Suit): Boolean {
+        val redSuits = listOf(Suit.HEARTS, Suit.DIAMONDS)
+        return (s1 in redSuits) == (s2 in redSuits)
+    }
+
     fun getMaalPoints(card: Card, maalCard: Card?): Int {
         val m = maalCard ?: return 0
         if (card.rank == Rank.JOKER) return 5 // Updated Standard Joker: 5 Points
@@ -44,8 +49,7 @@ object GameEngine {
             (m.rank == Rank.TWO && card.rank == Rank.ACE) || (m.rank == Rank.ACE && card.rank == Rank.KING)
         )
         
-        val sameColor = (m.suit == Suit.HEARTS || m.suit == Suit.DIAMONDS) == 
-                        (card.suit == Suit.HEARTS || card.suit == Suit.DIAMONDS)
+        val sameColor = isSameColor(m.suit, card.suit)
 
         return when {
             // Tiplu (Same suit): 2 Point
@@ -132,7 +136,7 @@ object GameEngine {
                     else -> "Multiple"
                 }
                 
-                val reason = when (val rank = card.rank) {
+                val reason = when (card.rank) {
                     Rank.JOKER -> "Joker ($label)"
                     m.rank -> "Tiplu ($label)"
                     else -> "Poplu/Jhiplu ($label)"
@@ -278,10 +282,21 @@ object GameEngine {
         return getGameResult(winner, playerCount, playerHands, shownCards, hasShown, maalCard, isDubliShow, startingBonuses).explanation
     }
 
-    /**
-     * Strategic helper: Returns all cards sharing the minimum importance score.
-     */
-    fun getSuggestedDiscards(hand: List<Card>, gameState: GameState, player: Int): List<Card> {
-        return AiPlayer.findBestDiscardOptions(hand, gameState, player)
+    private fun getStrategy(difficulty: Difficulty): DiscardStrategy {
+        return when (difficulty) {
+            Difficulty.EASY -> EasyDiscardStrategy()
+            Difficulty.MEDIUM -> MediumDiscardStrategy()
+            Difficulty.HARD -> HardDiscardStrategy()
+        }
+    }
+
+    fun getSuggestedDiscards(
+        hand: List<Card>,
+        gameState: GameState,
+        player: Int,
+        difficulty: Difficulty
+    ): List<Card> {
+        val strategy = getStrategy(difficulty)
+        return strategy.findBestDiscard(hand, gameState, player)
     }
 }

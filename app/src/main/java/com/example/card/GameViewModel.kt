@@ -35,7 +35,7 @@ class GameViewModel : ViewModel() {
 
     // Selection Dialog for Discards
     var showDiscardSelection by mutableStateOf(false)
-    var discardCandidates = mutableStateListOf<Card>()
+    val discardCandidates = mutableStateListOf<Card>()
 
     var userStats by mutableStateOf(UserStats())
         private set
@@ -92,8 +92,9 @@ class GameViewModel : ViewModel() {
     }
 
     private var pendingPlayerCount: Int? = null
+    private var pendingDifficulty: Difficulty? = null
 
-    fun initGame(playerCount: Int, showHints: Boolean) {
+    fun initGame(playerCount: Int, showHints: Boolean, difficulty: Difficulty = Difficulty.MEDIUM) {
         if (gameState == null) {
             val newState = GameState(viewModelScope, showHints)
             gameState = newState
@@ -107,8 +108,9 @@ class GameViewModel : ViewModel() {
                 showHelp = true
                 hasClosedHelpOnce = false
                 pendingPlayerCount = playerCount
+                pendingDifficulty = difficulty
             } else {
-                newState.setupGame(playerCount)
+                newState.setupGame(playerCount, difficulty)
                 showHelp = false
                 hasClosedHelpOnce = true
             }
@@ -119,9 +121,10 @@ class GameViewModel : ViewModel() {
         showHelp = show
         if (!show) {
             hasClosedHelpOnce = true
-            pendingPlayerCount?.let {
-                gameState?.setupGame(it)
+            pendingPlayerCount?.let { count ->
+                gameState?.setupGame(count, pendingDifficulty ?: Difficulty.MEDIUM)
                 pendingPlayerCount = null
+                pendingDifficulty = null
             }
         }
     }

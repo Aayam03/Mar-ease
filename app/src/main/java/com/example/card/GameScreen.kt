@@ -44,16 +44,18 @@ fun CardGameApp() {
             StartupScreen(navController = navController)
         }
         composable("player_selection") {
-            PlayerSelectionScreen { playerCount ->
-                navController.navigate("game_board/$playerCount/false") {
+            PlayerSelectionScreen { playerCount, difficulty ->
+                navController.navigate("game_board/$playerCount/$difficulty/false") {
                     popUpTo("startup")
                 }
             }
         }
-        composable("game_board/{playerCount}/{showHints}") { backStackEntry ->
+        composable("game_board/{playerCount}/{difficulty}/{showHints}") { backStackEntry ->
             val playerCount = backStackEntry.arguments?.getString("playerCount")?.toIntOrNull() ?: 4
+            val difficultyStr = backStackEntry.arguments?.getString("difficulty") ?: "HARD"
+            val difficulty = try { Difficulty.valueOf(difficultyStr) } catch (_: Exception) { Difficulty.HARD }
             val showHints = backStackEntry.arguments?.getString("showHints")?.toBoolean() ?: false
-            GameBoardScreen(playerCount = playerCount, showHints = showHints, navController = navController)
+            GameBoardScreen(playerCount = playerCount, difficulty = difficulty, showHints = showHints, navController = navController)
         }
     }
 }
@@ -61,7 +63,8 @@ fun CardGameApp() {
 @Composable
 fun StartupScreen(navController: NavController, viewModel: GameViewModel = viewModel()) {
     val config = LocalConfiguration.current
-    val logoSize = (config.screenHeightDp.dp * 0.3f).coerceAtLeast(150.dp)
+    val screenHeight = config.screenHeightDp.dp
+    val logoSize = (screenHeight * 0.3f).coerceAtLeast(150.dp)
     
     Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         Box(modifier = Modifier.align(Alignment.TopEnd).padding(16.dp)) {
@@ -79,7 +82,7 @@ fun StartupScreen(navController: NavController, viewModel: GameViewModel = viewM
                 modifier = Modifier.size(logoSize)
             )
             Spacer(modifier = Modifier.height(32.dp))
-            Button(onClick = { navController.navigate("game_board/4/true") }) {
+            Button(onClick = { navController.navigate("game_board/4/HARD/true") }) {
                 Text("Learn", fontSize = 18.sp)
             }
             Spacer(modifier = Modifier.height(16.dp))
@@ -156,12 +159,13 @@ fun UserProfileIcon(showHints: Boolean, viewModel: GameViewModel) {
 @Composable
 fun GameBoardScreen(
     playerCount: Int, 
+    difficulty: Difficulty,
     showHints: Boolean, 
     navController: NavController,
     viewModel: GameViewModel = viewModel()
 ) {
-    LaunchedEffect(playerCount, showHints) {
-        viewModel.initGame(playerCount, showHints)
+    LaunchedEffect(playerCount, showHints, difficulty) {
+        viewModel.initGame(playerCount, showHints, difficulty)
     }
 
     val gameState = viewModel.gameState ?: return
@@ -371,14 +375,20 @@ fun ActionButtons(gameState: GameState) {
                 val reqMelds = 3 - (alreadyShown / 3)
                 val reqCards = reqMelds * 3
 
-                val canShow = when {
-                    selected.size == 3 && alreadyShown == 0 && gameState.currentTurnPhase == TurnPhase.INITIAL_CHECK -> {
-                        val jokers = selected.filter { it.rank == Rank.JOKER }
-                        val identical = selected.all { it.rank == selected[0].rank && it.suit == selected[0].suit }
-                        jokers.size == 3 || identical
+                val canShow = when (selected.size) {
+                    3 -> {
+                        if (alreadyShown == 0 && gameState.currentTurnPhase == TurnPhase.INITIAL_CHECK) {
+                            val jokers = selected.filter { it.rank == Rank.JOKER }
+                            val identical = selected.all { it.rank == selected[0].rank && it.suit == selected[0].suit }
+                            jokers.size == 3 || identical
+                        } else false
                     }
-                    selected.size == reqCards && reqMelds > 0 -> AiPlayer.findAllInitialMelds(selected).size >= reqMelds
-                    selected.size == 14 && alreadyShown == 0 -> AiPlayer.findDublis(selected).size >= 7
+                    reqCards -> {
+                        if (reqMelds > 0) AiPlayer.findAllInitialMelds(selected).size >= reqMelds else false
+                    }
+                    14 -> {
+                        if (alreadyShown == 0) AiPlayer.findDublis(selected).size >= 7 else false
+                    }
                     else -> false
                 }
 
@@ -472,7 +482,7 @@ fun OverlayManager(
             onResume = { viewModel.togglePauseMenu(false) },
             onGoBack = { navController.navigate("startup") { popUpTo("startup") { inclusive = true } } },
             onLearnFromStart = { 
-                gameState.setupGame(gameState.playerCount)
+                gameState.setupGame(gameState.playerCount, gameState.difficulty)
                 viewModel.togglePauseMenu(false)
             }
         )

@@ -87,13 +87,14 @@ fun TopAreaView(
             }
 
             Box(modifier = Modifier.onGloballyPositioned { onDiscardPilePositioned(it.localToRoot(Offset.Zero)) }) {
+                val lastDiscard = gameState.discardPile.lastOrNull()
                 PileView(
                     name = "Discard", 
                     pile = gameState.discardPile, 
                     faceUp = true, 
                     cardHeight = cardHeight * 0.85f,
                     cardWidth = cardWidth * 0.85f,
-                    highlight = gameState.hint?.cards?.any { it.isSameInstance(gameState.discardPile.lastOrNull() ?: it) } ?: false,
+                    highlight = lastDiscard != null && (gameState.hint?.cards?.any { it.isSameInstance(lastDiscard) } ?: false),
                     onClick = { if (gameState.currentPlayer == 1 && gameState.currentTurnPhase == TurnPhase.DRAW) gameState.humanDrawsFromDiscard() }
                 )
             }
@@ -141,15 +142,15 @@ fun PlayerIndicator(player: Int, gameState: GameState, onPlayerIconPositioned: (
 @Composable
 fun HintView(hint: Hint?, modifier: Modifier = Modifier) {
     if (hint == null) return
-    var isMinimized by remember { mutableStateOf(false) }
+    val isMinimized = remember { mutableStateOf(false) }
 
-    if (isMinimized) {
+    if (isMinimized.value) {
         Box(
             modifier = modifier
                 .size(40.dp)
                 .clip(RoundedCornerShape(20.dp))
                 .background(Color.Black.copy(alpha = 0.7f))
-                .clickable { isMinimized = false },
+                .clickable { isMinimized.value = false },
             contentAlignment = Alignment.Center
         ) {
             Text("💡", fontSize = 20.sp)
@@ -170,7 +171,7 @@ fun HintView(hint: Hint?, modifier: Modifier = Modifier) {
                     Text(text = "Hint: ${hint.title}", fontWeight = FontWeight.Bold, color = Color.White, fontSize = 14.sp, modifier = Modifier.weight(1f))
                     Text(
                         "➖", 
-                        modifier = Modifier.clickable { isMinimized = true }.padding(2.dp),
+                        modifier = Modifier.clickable { isMinimized.value = true }.padding(2.dp),
                         color = Color.White,
                         fontSize = 12.sp
                     )
@@ -205,9 +206,8 @@ fun AnimatedCard(
         AnimationType.DISCARD -> discardPilePos
     }
 
-    var animationStarted by remember { mutableStateOf(false) }
+    var animationStarted by remember(animState) { mutableStateOf(false) }
     LaunchedEffect(animState) {
-        animationStarted = false
         animationStarted = true
     }
 

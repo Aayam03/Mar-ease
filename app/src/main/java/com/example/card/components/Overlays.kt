@@ -48,11 +48,12 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
-import com.example.card.Card
+import com.example.card.Card as CardData
 import com.example.card.GameEngine
 import com.example.card.GameState
 import com.example.card.TurnPhase
 import com.example.card.Rank
+import com.example.card.Difficulty
 
 @Composable
 fun PauseMenuOverlay(onResume: () -> Unit, onGoBack: () -> Unit, onLearnFromStart: () -> Unit) {
@@ -95,7 +96,6 @@ fun BasicsOverlay(hasShown: Boolean, onDismiss: () -> Unit) {
     val pages = remember(hasShown) {
         val list = mutableListOf<@Composable () -> Unit>()
         
-        // Introduction Page (Contextual) - Only show if hasShown is true
         if (hasShown) {
             list.add {
                 Column {
@@ -384,8 +384,8 @@ fun DubliStrategyOverlay(onDismiss: () -> Unit) {
 
 @Composable
 fun SelectionDialog(
-    candidates: List<com.example.card.Card>, 
-    onSelected: (com.example.card.Card) -> Unit, 
+    candidates: List<CardData>, 
+    onSelected: (CardData) -> Unit, 
     onDismiss: () -> Unit
 ) {
     Box(
@@ -484,7 +484,6 @@ fun GameEndOverlay(gameState: GameState, navController: NavController) {
                                     Spacer(modifier = Modifier.height(8.dp))
                                     Text("Maal Breakdown:", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Light)
                                     
-                                    // Row-based breakdown with card images
                                     FlowRow(
                                         modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
                                         mainAxisSpacing = 8.dp,
@@ -531,7 +530,7 @@ fun GameEndOverlay(gameState: GameState, navController: NavController) {
                 Spacer(modifier = Modifier.height(12.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Button(
-                        onClick = { gameState.setupGame(gameState.playerCount) },
+                        onClick = { gameState.setupGame(gameState.playerCount, gameState.difficulty) },
                         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp)
                     ) {
                         Text("New Game")
