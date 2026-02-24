@@ -45,7 +45,9 @@ fun CardGameApp() {
             StartupScreen(navController = navController)
         }
         composable("player_selection") {
-            PlayerSelectionScreen { playerCount, difficulty ->
+            PlayerSelectionScreen(
+                onBack = { navController.popBackStack() }
+            ) { playerCount, difficulty ->
                 navController.navigate("game_board/$playerCount/$difficulty/false") {
                     popUpTo("startup")
                 }
@@ -260,7 +262,7 @@ fun GameBoardScreen(
             }
         }
 
-        Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+        Box(modifier = Modifier.fillMaxSize().background(Color(0xFF1B3D2F))) {
             if (gameState.isInitializing) {
                 LoadingScreen()
             } else {
@@ -396,8 +398,12 @@ fun ActionButtons(gameState: GameState) {
                     else -> false
                 }
 
-                Button(onClick = { gameState.humanShows() }, enabled = canShow) {
-                    Text("SHOW", fontWeight = FontWeight.Bold)
+                Button(
+                    onClick = { gameState.humanShows() }, 
+                    enabled = canShow,
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFC62828))
+                ) {
+                    Text("SHOW", fontWeight = FontWeight.Bold, color = Color.White)
                 }
             }
             
@@ -407,21 +413,31 @@ fun ActionButtons(gameState: GameState) {
                 val hand = gameState.playerHands[1]?.toList() ?: emptyList()
                 val canWin = AiPlayer.canFinish(hand.filter { it !== selected }, gameState, 1)
 
-                Button(onClick = { 
-                    if (canWin) {
-                        gameState.humanWinsGame(selected)
-                    } else {
-                        gameState.humanDiscardsCard(selected)
-                    }
-                }) {
-                    Text(if (canWin) "WIN" else "DISCARD", fontWeight = FontWeight.Bold)
+                Button(
+                    onClick = { 
+                        if (canWin) {
+                            gameState.humanWinsGame(selected)
+                        } else {
+                            gameState.humanDiscardsCard(selected)
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = if (canWin) Color(0xFFFFD700) else Color(0xFF1976D2))
+                ) {
+                    Text(
+                        text = if (canWin) "WIN" else "DISCARD", 
+                        fontWeight = FontWeight.Bold,
+                        color = if (canWin) Color.Black else Color.White
+                    )
                 }
             }
 
             // END TURN button
             if (gameState.currentTurnPhase == TurnPhase.SHOW_OR_END) {
-                Button(onClick = { gameState.humanEndsTurnWithoutShowing() }) {
-                    Text("END TURN", fontWeight = FontWeight.Bold)
+                Button(
+                    onClick = { gameState.humanEndsTurnWithoutShowing() },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)
+                ) {
+                    Text("END TURN", fontWeight = FontWeight.Bold, color = Color.White)
                 }
             }
         }
