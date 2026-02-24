@@ -37,7 +37,7 @@ object GameEngine {
 
     fun getMaalPoints(card: Card, maalCard: Card?): Int {
         val m = maalCard ?: return 0
-        if (card.rank == Rank.JOKER) return 5 // Updated Standard Joker: 5 Points
+        if (card.rank == Rank.JOKER) return 5 // Standard Joker: 5 Points
         
         val v1 = card.rank.value
         val v2 = m.rank.value
@@ -52,15 +52,27 @@ object GameEngine {
         val sameColor = isSameColor(m.suit, card.suit)
 
         return when {
-            // Tiplu (Same suit): 2 Point
-            isTiplu && card.suit == m.suit -> 2
-            // Tiplu (Same color): 3 Points
-            isTiplu && sameColor -> 3
+            // Tiplu (Same suit): 3 Points
+            isTiplu && card.suit == m.suit -> 3
+            // Alter Tiplu (Same color, different suit): 5 Points
+            isTiplu && sameColor -> 5
             // Tiplu (Other color): 0 Point
             isTiplu -> 0
             // Poplu/Jhiplu (Same suit): 2 Points
             isNeighbor -> 2
             else -> 0
+        }
+    }
+
+    private fun calculateTotalPoints(base: Int, count: Int): Int {
+        if (count <= 0) return 0
+        if (count == 1) return base
+        return when (base) {
+            2 -> if (count == 2) 5 else 8
+            3 -> if (count == 2) 8 else 12
+            5 -> if (count == 2) 15 else 25
+            10 -> if (count == 2) 25 else 45
+            else -> base * count
         }
     }
 
@@ -125,10 +137,18 @@ object GameEngine {
         }
         
         val marriageCount = minOf(tiplus.size, poplus.size, jhiplus.size)
-        repeat(marriageCount) {
-            val t = tiplus[it]; val p = poplus[it]; val j = jhiplus[it]
-            breakdown.add(MaalBreakdown(null, 10, "Marriage Set (Tiplu-Poplu-Jhiplu)"))
-            usedCards.add(t); usedCards.add(p); usedCards.add(j)
+        if (marriageCount > 0) {
+            val totalPoints = calculateTotalPoints(10, marriageCount)
+            val bonus = totalPoints - (10 * marriageCount)
+            val label = when (marriageCount) {
+                1 -> "Single"
+                else -> "Multiple (+$bonus Bonus)"
+            }
+            breakdown.add(MaalBreakdown(null, totalPoints, "Marriage Set ($label)"))
+            
+            repeat(marriageCount) {
+                usedCards.add(tiplus[it]); usedCards.add(poplus[it]); usedCards.add(jhiplus[it])
+            }
         }
         
         // Remaining hand after marriage
@@ -138,7 +158,7 @@ object GameEngine {
             if (idx != -1) remainingHand.removeAt(idx)
         }
         
-        // 3. Standard Breakdown for remaining cards
+        // 3. Standard Breakdown for remaining cards with bonus for duplicates
         val counts = remainingHand.groupingBy { it.rank to it.suit }.eachCount()
         
         counts.forEach { (rankSuit, count) ->
@@ -146,24 +166,17 @@ object GameEngine {
             val basePoints = getMaalPoints(card, m)
             
             if (basePoints > 0) {
-                // Multiplier logic for multiple identical maal cards
-                val totalPoints = when (count) {
-                    1 -> basePoints
-                    2 -> basePoints * 1.5.toInt() // Bonus for double
-                    3 -> basePoints * 2 // Large bonus for triple
-                    else -> basePoints * count * 2
-                }
+                val totalPoints = calculateTotalPoints(basePoints, count)
+                val bonus = totalPoints - (basePoints * count)
                 
                 val label = when (count) {
                     1 -> "Single"
-                    2 -> "Double (x1.5)"
-                    3 -> "Triple (x2)"
-                    else -> "Multiple"
+                    else -> "Multiple (+$bonus Bonus)"
                 }
                 
-                val reason = when (card.rank) {
-                    Rank.JOKER -> "Joker ($label)"
-                    m.rank -> "Tiplu ($label)"
+                val reason = when {
+                    card.rank == Rank.JOKER -> "Joker ($label)"
+                    card.rank == m.rank -> "Tiplu ($label)"
                     else -> "Poplu/Jhiplu ($label)"
                 }
                 

@@ -253,6 +253,7 @@ fun BasicsOverlay(hasShown: Boolean, onDismiss: () -> Unit) {
                     Triple(Color.Yellow, "Last Drawn", "The card you just picked up."),
                     Triple(Color(0xFFFF69B4), "Selected", "Cards you've tapped to show/discard."),
                     Triple(Color(0xFF4CAF50), "Melded", "Cards forming a valid sequence/set."),
+                    Triple(Color(0xFF9C27B0), "Dubli Pair", "Identical cards. This appears when you have 4+ pairs."),
                     Triple(Color.Cyan, "Maal Joker", "New Jokers after Maal revelation."),
                     Triple(Color.Red, "Hint / Warning", "Suggested cards or alerts.")
                 )

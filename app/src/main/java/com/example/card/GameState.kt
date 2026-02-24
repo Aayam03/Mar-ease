@@ -270,7 +270,8 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
                 val alreadyShownCount = shownCards[1]?.size ?: 0
                 val reqMelds = 3 - (alreadyShownCount / 3)
                 val canShowRegular = withContext(Dispatchers.Default) { AiPlayer.findAllInitialMelds(handList).size >= reqMelds }
-                val canShowDubli = alreadyShownCount == 0 && withContext(Dispatchers.Default) { AiPlayer.findDublis(handList).size >= 7 }
+                // Dubli strategy is disabled after a meld show has been performed
+                val canShowDubli = alreadyShownCount == 0 && hasShown[1] == false && withContext(Dispatchers.Default) { AiPlayer.findDublis(handList).size >= 7 }
                 withContext(Dispatchers.Main) {
                     if (hasShown[1] == false && (canShowRegular || canShowDubli)) {
                         currentTurnPhase = TurnPhase.SHOW_OR_END
@@ -406,6 +407,7 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
         val alreadyShownCount = shownCards[1]?.size ?: 0
         val isFirstTurnCheck = isFirstTurn[1] == true && currentTurnPhase == TurnPhase.INITIAL_CHECK
 
+        // Dubli strategy is disabled after a meld show has been performed
         if (hasShown[1] == false && alreadyShownCount == 0 && selectedCards.size == 14) {
             val selectedList = selectedCards.toList()
             viewModelScope.launch {
@@ -608,7 +610,8 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
                     meldedCards.clear()
                     meldedCards.addAll(melds.flatten())
                     dubliCards.clear()
-                    if (dublis.size >= 4) {
+                    // Only show dubli hints if dubli strategy is still possible
+                    if (dublis.size >= 4 && hasShown[1] == false && alreadyShownCount == 0) {
                         dubliCards.addAll(dublis.flatten())
                     }
                 }
@@ -625,7 +628,7 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
                             if (showHints) hint = Hint(title = "Tunnel!", message = "You have a Joker Tunnel! Select 3 Jokers and SHOW to get points. Even after this, you'll need to show 3 sequences to reveal Maal.", cards = jokers.take(3))
                         } else if (identical.isNotEmpty() && alreadyShownCount == 0) {
                             if (showHints) hint = Hint(title = "Tunnel!", message = "You have an Identical Tunnel! Select 3 identical cards and SHOW to get points. Even after this, you'll need to show 3 sequences to reveal Maal.", cards = identical.values.first().take(3))
-                        } else if (dublis.size >= 7 && alreadyShownCount == 0) {
+                        } else if (dublis.size >= 7 && alreadyShownCount == 0 && hasShown[1] == false) {
                             if (showHints) hint = Hint(title = "Dubli Show", message = "You have 7 pairs! Select 14 cards and SHOW to reveal Maal.", cards = dublis.take(7).flatten())
                         } else if (possibleInitial.size >= reqMelds && reqMelds > 0) {
                             if (showHints) hint = Hint(title = "Ready to Show", message = "You already have the required pure melds! Select ${reqMelds * 3} cards and SHOW to reveal Maal.", cards = possibleInitial.take(reqMelds).flatten())

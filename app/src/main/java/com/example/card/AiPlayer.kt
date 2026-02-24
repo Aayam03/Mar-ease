@@ -280,7 +280,7 @@ object AiPlayer {
         
         // Pair logic: Value increases as we get closer to Dubli show/win.
         // Summing scores allows hybrid play: cards good for both melds and pairs are highly valued.
-        val pairScore = if (isIdentical) {
+        var pairScore = if (isIdentical) {
             val base = if (isAimingForDubli) 500 else 0
             base + when {
                 pairsCount >= 7 -> 750 // Priority over melds when close to finish
@@ -289,6 +289,15 @@ object AiPlayer {
                 else -> 80 // Weak interest in pairs
             }
         } else 0
+
+        // Decrease priority of 3 identical cards (Tunnelas) after show, 
+        // as they are rare to complete and cannot use Jokers.
+        if (gameState.hasShown[player] == true && !isAimingForDubli) {
+            val identicalCount = hand.count { it.rank == card.rank && it.suit == card.suit }
+            if (identicalCount >= 2) {
+                pairScore = 10 // Very low priority
+            }
+        }
         
         return meldScore + pairScore
     }
@@ -401,29 +410,29 @@ object AiPlayer {
         val analysis = analyzeHand(hand, gameState, player)
         val isDeadCard = isDead(bestCard, gameState)
         val reason = when {
-            isDeadCard -> "Discarding ${bestCard.rank.symbol}${bestCard.suit.symbol} because it is 'Dead' (all other copies are out)."
-            GameEngine.isMaal(bestCard, gameState.maalCard) -> "Discarding ${bestCard.rank.symbol}${bestCard.suit.symbol} (Maal)."
-            !hasShown && findAllInitialMelds(hand).size >= 3 -> "Discarding ${bestCard.rank.symbol}${bestCard.suit.symbol} to protect your melds."
-            analysis.meldedIds.contains(bestCard.id) -> "Discarding ${bestCard.rank.symbol}${bestCard.suit.symbol} from a meld."
+            isDeadCard -> "Discarding ${bestCard.rank.symbol}${bestCard.suit.symbol} because it is 'dead' (all other copies are already played)."
+            GameEngine.isMaal(bestCard, gameState.maalCard) -> "Discarding ${bestCard.rank.symbol}${bestCard.suit.symbol} because it's a Maal card that doesn't fit into your hand."
+            !hasShown && findAllInitialMelds(hand).size >= 3 -> "Discarding ${bestCard.rank.symbol}${bestCard.suit.symbol} to keep your ready-to-show sequences intact."
+            analysis.meldedIds.contains(bestCard.id) -> "Discarding ${bestCard.rank.symbol}${bestCard.suit.symbol} from an existing combination to try for something better."
             analysis.identicalMatchIds.contains(bestCard.id) -> "Discarding one ${bestCard.rank.symbol}${bestCard.suit.symbol} from a pair."
-            analysis.consecutiveRunIds.contains(bestCard.id) -> "Discarding ${bestCard.rank.symbol}${bestCard.suit.symbol} near a sequence."
-            analysis.gapRunIds.contains(bestCard.id) -> "Discarding ${bestCard.rank.symbol}${bestCard.suit.symbol} (gap connection)."
-            analysis.pairIds.contains(bestCard.id) -> "Discarding ${bestCard.rank.symbol}${bestCard.suit.symbol} (mixed-suit pair)."
-            else -> "Discarding ${bestCard.rank.symbol}${bestCard.suit.symbol} (worthless card)."
+            analysis.consecutiveRunIds.contains(bestCard.id) -> "Discarding ${bestCard.rank.symbol}${bestCard.suit.symbol} even though it's near another card, as other options were even less useful."
+            analysis.gapRunIds.contains(bestCard.id) -> "Discarding ${bestCard.rank.symbol}${bestCard.suit.symbol} because it only has a 'gap' connection to your hand."
+            analysis.pairIds.contains(bestCard.id) -> "Discarding ${bestCard.rank.symbol}${bestCard.suit.symbol} from a mixed-suit pair."
+            else -> "Discarding ${bestCard.rank.symbol}${bestCard.suit.symbol} because it doesn't connect with any other cards in your hand."
         }
         return DiscardDecision(bestCard, reason)
     }
 
     fun shouldPickFromDiscard(card: Card, hand: List<Card>, gameState: GameState, player: Int): DrawDecision {
         // Always pick Jokers/Maal regardless of difficulty (essential rules)
-        if (gameState.isJoker(card, player)) return DrawDecision(true, "Always pick a Joker!")
-        if (GameEngine.isMaal(card, gameState.maalCard)) return DrawDecision(true, "Pick this Maal card!")
+        if (gameState.isJoker(card, player)) return DrawDecision(true, "Pick this up! It's a Joker, which can act as any card.")
+        if (GameEngine.isMaal(card, gameState.maalCard)) return DrawDecision(true, "Pick this up! It's a Maal card and will give you points.")
         
         // Simulation to ensure we don't pick and immediately discard the same card
         val hypotheticalHand = hand + card
         val discardSimulation = findCardToDiscard(hypotheticalHand, gameState, player)
         if (discardSimulation.card.isSameInstance(card)) {
-            return DrawDecision(false, "Draw from stock (this discard is not useful).")
+            return DrawDecision(false, "Don't pick this up; drawing from the stock pile is likely better.")
         }
 
         // Difficulty Logic for Drawing:
@@ -439,12 +448,12 @@ object AiPlayer {
 
         if (hand.any { it.rank == card.rank && it.suit == card.suit }) {
             val countInHand = hand.count { it.rank == card.rank && it.suit == card.suit }
-            if (countInHand >= 3 && !isAimingForDubli(player, hand, gameState)) return DrawDecision(false, "Already have a Tunnela.")
+            if (countInHand >= 3 && !isAimingForDubli(player, hand, gameState)) return DrawDecision(false, "You already have three of these cards (a Tunnela).")
         }
 
         if (isAimingForDubli(player, hand, gameState)) {
             val formsPair = isPartOfIdenticalMatch(card, hand)
-            if (formsPair) return DrawDecision(true, "Take this! It forms an identical pair (Dubli).")
+            if (formsPair) return DrawDecision(true, "Pick this up! It forms an identical pair for your Dubli strategy.")
         }
 
         val hasShown = gameState.hasShown[player] == true
@@ -459,16 +468,32 @@ object AiPlayer {
                 if (areAlreadyMeldedTogether) continue
 
                 if (hasShown) { 
-                    if (isValidGeneralMeld(card, c2, c3, gameState, player)) return DrawDecision(true, "Take it! Completes a meld.") 
+                    if (isValidGeneralMeld(card, c2, c3, gameState, player)) return DrawDecision(true, "Pick this up! It completes a combination (sequence or set) in your hand.") 
                 } else { 
-                    if (isValidInitialMeld(card, c2, c3)) return DrawDecision(true, "Take it! Forms a pure meld.") 
+                    if (isValidInitialMeld(card, c2, c3)) return DrawDecision(true, "Pick this up! It forms a pure sequence or set needed for your initial show.") 
                 }
             }
         }
 
-        if (isAlreadyMelded && !isAimingForDubli(player, hand, gameState)) return DrawDecision(false, "Already in a meld.")
-        if (isPartOfConsecutiveRun(card, hand, gameState, player)) return DrawDecision(true, "Strong sequence connection.")
-        return DrawDecision(false, "Draw from stock.")
+        if (isAlreadyMelded && !isAimingForDubli(player, hand, gameState)) return DrawDecision(false, "You already have a combination using this card.")
+        
+        // Connect directly (consecutive) but NOT for gap runs
+        val connectingCard = findConnectingCard(card, hand, 1)
+        if (connectingCard != null) {
+            return DrawDecision(true, "Pick this up! It connects directly to your ${connectingCard.rank.symbol}${connectingCard.suit.symbol} to form a potential sequence.")
+        }
+        
+        return DrawDecision(false, "This card doesn't complete any combinations; drawing from the stock pile is likely better.")
+    }
+    
+    private fun findConnectingCard(card: Card, others: List<Card>, dist: Int): Card? {
+        val cVals = if (card.rank == Rank.ACE) listOf(1, 14) else listOf(card.rank.value)
+        return others.find { other ->
+            other.suit == card.suit && run {
+                val oVals = if (other.rank == Rank.ACE) listOf(1, 14) else listOf(other.rank.value)
+                cVals.any { cv -> oVals.any { ov -> abs(cv - ov) == dist } }
+            }
+        }
     }
 
     private fun findAnyMeldGreedyIndices(cards: List<Card>, used: BitSet, gameState: GameState, player: Int, ignoreShownStatus: Boolean): List<Int>? {
