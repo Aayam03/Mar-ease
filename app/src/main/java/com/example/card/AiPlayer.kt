@@ -419,6 +419,13 @@ object AiPlayer {
         if (gameState.isJoker(card, player)) return DrawDecision(true, "Always pick a Joker!")
         if (GameEngine.isMaal(card, gameState.maalCard)) return DrawDecision(true, "Pick this Maal card!")
         
+        // Simulation to ensure we don't pick and immediately discard the same card
+        val hypotheticalHand = hand + card
+        val discardSimulation = findCardToDiscard(hypotheticalHand, gameState, player)
+        if (discardSimulation.card.isSameInstance(card)) {
+            return DrawDecision(false, "Draw from stock (this discard is not useful).")
+        }
+
         // Difficulty Logic for Drawing:
         if (gameState.difficulty == Difficulty.EASY && Random.nextFloat() < 0.6f) {
             return DrawDecision(false, "Easy AI missed an opportunity.")

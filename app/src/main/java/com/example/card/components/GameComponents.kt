@@ -70,7 +70,7 @@ fun TopAreaView(
                     faceUp = false,
                     cardHeight = cardHeight * 0.85f, 
                     cardWidth = cardWidth * 0.85f,
-                    onClick = { if (gameState.currentPlayer == 1 && gameState.currentTurnPhase == TurnPhase.DRAW) gameState.humanDrawsFromStock() }
+                    onClick = { if (gameState.currentPlayer == 1 && (gameState.currentTurnPhase == TurnPhase.DRAW || gameState.currentTurnPhase == TurnPhase.INITIAL_CHECK)) gameState.humanDrawsFromStock() }
                 )
             }
             
@@ -95,7 +95,7 @@ fun TopAreaView(
                     cardHeight = cardHeight * 0.85f,
                     cardWidth = cardWidth * 0.85f,
                     highlight = lastDiscard != null && (gameState.hint?.cards?.any { it.isSameInstance(lastDiscard) } ?: false),
-                    onClick = { if (gameState.currentPlayer == 1 && gameState.currentTurnPhase == TurnPhase.DRAW) gameState.humanDrawsFromDiscard() }
+                    onClick = { if (gameState.currentPlayer == 1 && (gameState.currentTurnPhase == TurnPhase.DRAW || gameState.currentTurnPhase == TurnPhase.INITIAL_CHECK)) gameState.humanDrawsFromDiscard() }
                 )
             }
         }

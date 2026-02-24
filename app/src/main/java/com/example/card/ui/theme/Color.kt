@@ -6,12 +6,16 @@ import androidx.compose.ui.graphics.Color
 val MarEasePrimary = Color(0xFF0091FF)
 // Darker blue for backgrounds/gradients
 val MarEaseDark = Color(0xFF0055C8)
+// Deep Navy for Hard Mode
+val MarEaseHard = Color(0xFF001F3F)
+// Deep Green for Easy Mode
+val MarEaseEasy = Color(0xFF1B5E20)
 // Cyan/Aqua accent color
 val MarEaseAccent = Color(0xFF00D4FF)
 // Pure white for text and highlights
 val MarEaseWhite = Color(0xFFFFFFFF)
 
-// Legacy colors (optional, keeping for compatibility if needed)
+// Legacy colors
 val Purple80 = Color(0xFFD0BCFF)
 val PurpleGrey80 = Color(0xFFCCC2DC)
 val Pink80 = Color(0xFFEFB8C8)

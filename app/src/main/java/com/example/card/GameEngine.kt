@@ -82,9 +82,34 @@ object GameEngine {
         
         val breakdown = mutableListOf<MaalBreakdown>()
         
-        // 1. Starting Bonus (Tunnelas, Special Show, etc.)
+        // 1. Starting Bonus (Tunnelas)
         if (startingBonus > 0) {
-            breakdown.add(MaalBreakdown(null, startingBonus, "Starting Bonus (Tunnelas)"))
+            var remainingBonus = startingBonus
+            
+            // Joker Tunnelas (30 points)
+            val numJokerTunnelas = remainingBonus / 30
+            if (numJokerTunnelas > 0) {
+                val jokerCard = Card(Suit.NONE, Rank.JOKER)
+                repeat(numJokerTunnelas) {
+                    breakdown.add(MaalBreakdown(jokerCard, 30, "Joker Tunnela"))
+                }
+                remainingBonus %= 30
+            }
+
+            // Regular Tunnelas (5 points)
+            val numNormalTunnelas = remainingBonus / 5
+            if (numNormalTunnelas > 0) {
+                // Try to find the actual cards from the 'shown' list for UI
+                val shownTunnelaCards = (shownCards[player] ?: emptyList())
+                    .groupBy { it.rank to it.suit }
+                    .filter { it.value.size >= 3 && it.key.first != Rank.JOKER }
+                    .map { it.value.first() }
+                
+                repeat(numNormalTunnelas) { index ->
+                    val card = shownTunnelaCards.getOrNull(index)
+                    breakdown.add(MaalBreakdown(card, 5, "Tunnela"))
+                }
+            }
         }
 
         val usedCards = mutableListOf<Card>()

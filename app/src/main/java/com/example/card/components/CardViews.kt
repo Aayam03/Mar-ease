@@ -62,21 +62,45 @@ fun CardView(
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White)
     ) {
-        Box(modifier = Modifier.fillMaxSize()) {
+        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+            val cardHeight = maxHeight
+            val cardWidth = maxWidth
+            
             if (faceUp && card != null) {
                 if (card.rank == Rank.JOKER) {
-                    Box(modifier = Modifier.fillMaxSize().padding(4.dp), contentAlignment = Alignment.Center) {
-                         Text(text = "🃏", fontSize = 48.sp)
+                    Box(modifier = Modifier.fillMaxSize().padding(2.dp), contentAlignment = Alignment.Center) {
+                         // Scale Joker emoji based on card height
+                         val fontSize = (cardHeight.value * 0.4f).coerceAtLeast(12f).sp
+                         Text(text = "🃏", fontSize = fontSize)
                     }
                 } else {
+                    val symbolSize = (cardHeight.value * 0.12f).coerceAtLeast(8f).sp
+                    val mainSuitSize = (cardHeight.value * 0.25f).coerceAtLeast(14f).sp
+                    
                     Column(
-                        modifier = Modifier.fillMaxSize().padding(4.dp),
+                        modifier = Modifier.fillMaxSize().padding(2.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Text(text = card.rank.symbol, color = cardColor, fontSize = 14.sp, fontWeight = FontWeight.Bold, modifier = Modifier.align(Alignment.Start))
-                        Text(text = card.suit.symbol.toString(), color = cardColor, fontSize = 32.sp)
-                        Text(text = card.rank.symbol, color = cardColor, fontSize = 14.sp, fontWeight = FontWeight.Bold, modifier = Modifier.align(Alignment.End))
+                        Text(
+                            text = card.rank.symbol, 
+                            color = cardColor, 
+                            fontSize = symbolSize, 
+                            fontWeight = FontWeight.Bold, 
+                            modifier = Modifier.align(Alignment.Start)
+                        )
+                        Text(
+                            text = card.suit.symbol.toString(), 
+                            color = cardColor, 
+                            fontSize = mainSuitSize
+                        )
+                        Text(
+                            text = card.rank.symbol, 
+                            color = cardColor, 
+                            fontSize = symbolSize, 
+                            fontWeight = FontWeight.Bold, 
+                            modifier = Modifier.align(Alignment.End)
+                        )
                     }
                 }
             } else {

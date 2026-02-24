@@ -30,6 +30,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import coil.compose.AsyncImage
 import com.example.card.components.*
+import com.example.card.ui.theme.CardTheme
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.delay
 
@@ -170,153 +171,156 @@ fun GameBoardScreen(
 
     val gameState = viewModel.gameState ?: return
 
-    val config = LocalConfiguration.current
-    val screenHeight = config.screenHeightDp.dp
-    
-    val cardHeight = (screenHeight * 0.22f).coerceAtMost(180.dp) 
-    val cardWidth = cardHeight * 0.65f 
+    val themeDifficulty = if (showHints) Difficulty.EASY else difficulty
+    CardTheme(difficulty = themeDifficulty) {
+        val config = LocalConfiguration.current
+        val screenHeight = config.screenHeightDp.dp
+        
+        val cardHeight = (screenHeight * 0.22f).coerceAtMost(180.dp) 
+        val cardWidth = cardHeight * 0.65f 
 
-    var stockPilePos by remember { mutableStateOf(Offset.Zero) }
-    var discardPilePos by remember { mutableStateOf(Offset.Zero) }
-    var myHandPos by remember { mutableStateOf(Offset.Zero) }
-    val playerPositions = remember { mutableMapOf<Int, Offset>() }
-    var selectedPlayerForShowView by remember { mutableStateOf<Int?>(null) }
+        var stockPilePos by remember { mutableStateOf(Offset.Zero) }
+        var discardPilePos by remember { mutableStateOf(Offset.Zero) }
+        var myHandPos by remember { mutableStateOf(Offset.Zero) }
+        val playerPositions = remember { mutableMapOf<Int, Offset>() }
+        var selectedPlayerForShowView by remember { mutableStateOf<Int?>(null) }
 
-    val hasPlayerShown = gameState.hasShown[1] == true
-    LaunchedEffect(hasPlayerShown) {
-        if (hasPlayerShown && !gameState.isInitializing) {
-            delay(1500) 
-            viewModel.toggleHelp(true)
-        }
-    }
-
-    // Explaining Highlights in Learn Mode
-    if (showHints) {
-        val lastDrawn = gameState.lastDrawnCard
-        val hasMelds = gameState.meldedCards.isNotEmpty()
-        val hasSelection = gameState.selectedCards.isNotEmpty()
-        val hasHints = gameState.hint?.cards?.isNotEmpty() == true
-        val hasJokers = gameState.hasShown[1] == true && (gameState.playerHands[1]?.any { gameState.isJoker(it, 1) } == true)
-
-        LaunchedEffect(lastDrawn) {
-            if (lastDrawn != null && viewModel.explainedHighlights["yellow"] != true) {
-                gameState.showGameMessage("Yellow Highlight: Indicates the card you just drew.")
-                viewModel.markHighlightExplained("yellow")
-            }
-        }
-        LaunchedEffect(hasMelds) {
-            if (hasMelds && viewModel.explainedHighlights["green"] != true) {
-                gameState.showGameMessage("Green Highlight: Identifies cards that are part of a valid sequence or set.")
-                viewModel.markHighlightExplained("green")
-            }
-        }
-        LaunchedEffect(hasSelection) {
-            if (hasSelection && viewModel.explainedHighlights["pink"] != true) {
-                gameState.showGameMessage("Pink Highlight: Shows the cards you've currently selected.")
-                viewModel.markHighlightExplained("pink")
-            }
-        }
-        LaunchedEffect(hasHints) {
-            if (hasHints && viewModel.explainedHighlights["red"] != true) {
-                gameState.showGameMessage("Red Highlight: Points to cards suggested by the hint.")
-                viewModel.markHighlightExplained("red")
-            }
-        }
-        LaunchedEffect(hasJokers) {
-            if (hasJokers && viewModel.explainedHighlights["cyan"] != true) {
-                gameState.showGameMessage("Cyan Highlight: Marks cards that have become Jokers after Maal revelation.")
-                viewModel.markHighlightExplained("cyan")
+        val hasPlayerShown = gameState.hasShown[1] == true
+        LaunchedEffect(hasPlayerShown) {
+            if (hasPlayerShown && !gameState.isInitializing) {
+                delay(1500) 
+                viewModel.toggleHelp(true)
             }
         }
 
-        // Contextual Dubli Strategy Hint
-        val myHand = gameState.playerHands[1]?.toList() ?: emptyList()
-        LaunchedEffect(myHand, gameState.currentTurnPhase) {
-            if (!viewModel.explainedDubliStrategy && 
-                gameState.currentTurnPhase == TurnPhase.PLAY_OR_DISCARD &&
-                AiPlayer.isAimingForDubli(1, myHand, gameState)) {
-                
-                delay(1000)
-                viewModel.markDubliStrategyExplained()
-                viewModel.showDubliOverlay = true
+        // Explaining Highlights in Learn Mode
+        if (showHints) {
+            val lastDrawn = gameState.lastDrawnCard
+            val hasMelds = gameState.meldedCards.isNotEmpty()
+            val hasSelection = gameState.selectedCards.isNotEmpty()
+            val hasHints = gameState.hint?.cards?.isNotEmpty() == true
+            val hasJokers = gameState.hasShown[1] == true && (gameState.playerHands[1]?.any { gameState.isJoker(it, 1) } == true)
+
+            LaunchedEffect(lastDrawn) {
+                if (lastDrawn != null && viewModel.explainedHighlights["yellow"] != true) {
+                    gameState.showGameMessage("Yellow Highlight: Indicates the card you just drew.")
+                    viewModel.markHighlightExplained("yellow")
+                }
             }
-        }
-    }
-
-    LaunchedEffect(gameState.winner) {
-        if (gameState.winner != null) {
-            val finalPointsDiff = GameEngine.getFinalScoreDifference(
-                gameState.winner!!, 
-                gameState.playerCount, 
-                gameState.playerHands, 
-                gameState.shownCards, 
-                gameState.hasShown, 
-                gameState.maalCard
-            )
-            viewModel.updateStats(showHints, -finalPointsDiff)
-        }
-    }
-
-    Box(modifier = Modifier.fillMaxSize().background(Color(0xFF1B5E20))) {
-        if (gameState.isInitializing) {
-            LoadingScreen()
-        } else {
-            if (showHints) {
-                MainGameLayoutLearn(
-                    gameState = gameState,
-                    cardHeight = cardHeight,
-                    cardWidth = cardWidth,
-                    onStockPilePositioned = { stockPilePos = it },
-                    onDiscardPilePositioned = { discardPilePos = it },
-                    onPlayerIconPositioned = { p, pos -> playerPositions[p] = pos },
-                    onToggleShowView = { p -> selectedPlayerForShowView = p },
-                    onHandPositioned = { myHandPos = it }
-                )
-            } else {
-                MainGameLayoutPlay(
-                    gameState = gameState,
-                    cardHeight = cardHeight,
-                    cardWidth = cardWidth,
-                    onStockPilePositioned = { stockPilePos = it },
-                    onDiscardPilePositioned = { discardPilePos = it },
-                    onPlayerIconPositioned = { p, pos -> playerPositions[p] = pos },
-                    onToggleShowView = { p -> selectedPlayerForShowView = p },
-                    onHandPositioned = { myHandPos = it }
-                )
+            LaunchedEffect(hasMelds) {
+                if (hasMelds && viewModel.explainedHighlights["green"] != true) {
+                    gameState.showGameMessage("Green Highlight: Identifies cards that are part of a valid sequence or set.")
+                    viewModel.markHighlightExplained("green")
+                }
             }
-
-            Box(modifier = Modifier.fillMaxSize()) {
-                Box(modifier = Modifier.align(Alignment.TopEnd)) {
-                    UserProfileIcon(showHints, viewModel)
+            LaunchedEffect(hasSelection) {
+                if (hasSelection && viewModel.explainedHighlights["pink"] != true) {
+                    gameState.showGameMessage("Pink Highlight: Shows the cards you've currently selected.")
+                    viewModel.markHighlightExplained("pink")
+                }
+            }
+            LaunchedEffect(hasHints) {
+                if (hasHints && viewModel.explainedHighlights["red"] != true) {
+                    gameState.showGameMessage("Red Highlight: Points to cards suggested by the hint.")
+                    viewModel.markHighlightExplained("red")
+                }
+            }
+            LaunchedEffect(hasJokers) {
+                if (hasJokers && viewModel.explainedHighlights["cyan"] != true) {
+                    gameState.showGameMessage("Cyan Highlight: Marks cards that have become Jokers after Maal revelation.")
+                    viewModel.markHighlightExplained("cyan")
                 }
             }
 
-            GameControls(
-                showHints = showHints,
-                onPauseClick = { viewModel.togglePauseMenu(true) },
-                onHelpClick = { viewModel.toggleHelp(true) }
-            )
-
-            AnimatedCard(
-                gameState = gameState,
-                stockPilePos = stockPilePos,
-                discardPilePos = discardPilePos,
-                playerPositions = playerPositions,
-                myHandPos = myHandPos,
-                cardHeight = cardHeight,
-                cardWidth = cardWidth
-            )
+            // Contextual Dubli Strategy Hint
+            val myHand = gameState.playerHands[1]?.toList() ?: emptyList()
+            LaunchedEffect(myHand, gameState.currentTurnPhase) {
+                if (!viewModel.explainedDubliStrategy && 
+                    gameState.currentTurnPhase == TurnPhase.PLAY_OR_DISCARD &&
+                    AiPlayer.isAimingForDubli(1, myHand, gameState)) {
+                    
+                    delay(1000)
+                    viewModel.markDubliStrategyExplained()
+                    viewModel.showDubliOverlay = true
+                }
+            }
         }
 
-        OverlayManager(
-            viewModel = viewModel,
-            gameState = gameState,
-            navController = navController,
-            selectedPlayerForShowView = selectedPlayerForShowView,
-            cardHeight = cardHeight,
-            cardWidth = cardWidth,
-            onDismissShowView = { selectedPlayerForShowView = null }
-        )
+        LaunchedEffect(gameState.winner) {
+            if (gameState.winner != null) {
+                val finalPointsDiff = GameEngine.getFinalScoreDifference(
+                    gameState.winner!!, 
+                    gameState.playerCount, 
+                    gameState.playerHands, 
+                    gameState.shownCards, 
+                    gameState.hasShown, 
+                    gameState.maalCard
+                )
+                viewModel.updateStats(showHints, -finalPointsDiff)
+            }
+        }
+
+        Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+            if (gameState.isInitializing) {
+                LoadingScreen()
+            } else {
+                if (showHints) {
+                    MainGameLayoutLearn(
+                        gameState = gameState,
+                        cardHeight = cardHeight,
+                        cardWidth = cardWidth,
+                        onStockPilePositioned = { stockPilePos = it },
+                        onDiscardPilePositioned = { discardPilePos = it },
+                        onPlayerIconPositioned = { p, pos -> playerPositions[p] = pos },
+                        onToggleShowView = { p -> selectedPlayerForShowView = p },
+                        onHandPositioned = { myHandPos = it }
+                    )
+                } else {
+                    MainGameLayoutPlay(
+                        gameState = gameState,
+                        cardHeight = cardHeight,
+                        cardWidth = cardWidth,
+                        onStockPilePositioned = { stockPilePos = it },
+                        onDiscardPilePositioned = { discardPilePos = it },
+                        onPlayerIconPositioned = { p, pos -> playerPositions[p] = pos },
+                        onToggleShowView = { p -> selectedPlayerForShowView = p },
+                        onHandPositioned = { myHandPos = it }
+                    )
+                }
+
+                Box(modifier = Modifier.fillMaxSize()) {
+                    Box(modifier = Modifier.align(Alignment.TopEnd)) {
+                        UserProfileIcon(showHints, viewModel)
+                    }
+                }
+
+                GameControls(
+                    showHints = showHints,
+                    onPauseClick = { viewModel.togglePauseMenu(true) },
+                    onHelpClick = { viewModel.toggleHelp(true) }
+                )
+
+                AnimatedCard(
+                    gameState = gameState,
+                    stockPilePos = stockPilePos,
+                    discardPilePos = discardPilePos,
+                    playerPositions = playerPositions,
+                    myHandPos = myHandPos,
+                    cardHeight = cardHeight,
+                    cardWidth = cardWidth
+                )
+            }
+
+            OverlayManager(
+                viewModel = viewModel,
+                gameState = gameState,
+                navController = navController,
+                selectedPlayerForShowView = selectedPlayerForShowView,
+                cardHeight = cardHeight,
+                cardWidth = cardWidth,
+                onDismissShowView = { selectedPlayerForShowView = null }
+            )
+        }
     }
 }
 
@@ -398,7 +402,7 @@ fun ActionButtons(gameState: GameState) {
             }
             
             // DISCARD/WIN button logic
-            if (gameState.currentTurnPhase == TurnPhase.PLAY_OR_DISCARD && gameState.selectedCards.size == 1) {
+            if ((gameState.currentTurnPhase == TurnPhase.PLAY_OR_DISCARD || gameState.currentTurnPhase == TurnPhase.INITIAL_CHECK) && gameState.selectedCards.size == 1) {
                 val selected = gameState.selectedCards.first()
                 val hand = gameState.playerHands[1]?.toList() ?: emptyList()
                 val canWin = AiPlayer.canFinish(hand.filter { it !== selected }, gameState, 1)
@@ -407,7 +411,7 @@ fun ActionButtons(gameState: GameState) {
                     if (canWin) {
                         gameState.humanWinsGame(selected)
                     } else {
-                        gameState.requestDiscardSelection() 
+                        gameState.humanDiscardsCard(selected)
                     }
                 }) {
                     Text(if (canWin) "WIN" else "DISCARD", fontWeight = FontWeight.Bold)

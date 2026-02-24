@@ -290,9 +290,9 @@ fun BasicsOverlay(hasShown: Boolean, onDismiss: () -> Unit) {
     ) {
         Card(
             modifier = Modifier
-                .padding(16.dp)
-                .fillMaxWidth(0.9f)
-                .fillMaxHeight(0.85f)
+                .padding(8.dp)
+                .fillMaxWidth(0.98f)
+                .fillMaxHeight(0.95f)
                 .clickable(enabled = false) { },
             shape = RoundedCornerShape(24.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
@@ -306,13 +306,13 @@ fun BasicsOverlay(hasShown: Boolean, onDismiss: () -> Unit) {
                     Text("END TUTORIAL", fontSize = 18.sp, fontWeight = FontWeight.ExtraBold, color = Color.Red)
                 }
 
-                Column(modifier = Modifier.padding(32.dp).fillMaxSize(), verticalArrangement = Arrangement.SpaceBetween) {
+                Column(modifier = Modifier.padding(24.dp).fillMaxSize(), verticalArrangement = Arrangement.SpaceBetween) {
                     Box(modifier = Modifier.weight(1f).padding(top = 24.dp).verticalScroll(scrollState)) {
                         pages[currentPage]()
                     }
 
                     Column {
-                        HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
@@ -415,6 +415,7 @@ fun SelectionDialog(
                 ) {
                     items(candidates) { card ->
                         Box(modifier = Modifier.size(60.dp, 90.dp).clickable { onSelected(card) }) {
+
                             CardView(card = card, faceUp = true)
                         }
                     }
