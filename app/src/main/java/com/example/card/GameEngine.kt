@@ -140,10 +140,7 @@ object GameEngine {
         if (marriageCount > 0) {
             val totalPoints = calculateTotalPoints(10, marriageCount)
             val bonus = totalPoints - (10 * marriageCount)
-            val label = when (marriageCount) {
-                1 -> "Single"
-                else -> "Multiple (+$bonus Bonus)"
-            }
+            val label = if (marriageCount == 1) "Single" else "*$marriageCount (+$bonus Bonus)"
             breakdown.add(MaalBreakdown(null, totalPoints, "Marriage Set ($label)"))
             
             repeat(marriageCount) {
@@ -169,10 +166,7 @@ object GameEngine {
                 val totalPoints = calculateTotalPoints(basePoints, count)
                 val bonus = totalPoints - (basePoints * count)
                 
-                val label = when (count) {
-                    1 -> "Single"
-                    else -> "Multiple (+$bonus Bonus)"
-                }
+                val label = if (count == 1) "Single" else "*$count (+$bonus Bonus)"
                 
                 val reason = when {
                     card.rank == Rank.JOKER -> "Joker ($label)"

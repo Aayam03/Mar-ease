@@ -507,17 +507,17 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
                             hasShown[1] = true
                             isDubliShow[1] = true
                             showGameMessage("Dubli Show Success!")
-                            
+
                             if (hand.size == 7 && isFirstTurnCheck) pickMaalCard()
-                            
+
                             selectedCards.clear()
                             canWinWithSelected = false
-                            
-                            if (currentTurnPhase == TurnPhase.INITIAL_CHECK) currentTurnPhase = TurnPhase.DRAW
-                            else {
-                                // After showing from end phase, move to ENDED
+
+                            if (currentTurnPhase == TurnPhase.SHOW_OR_END) {
                                 currentTurnPhase = TurnPhase.ENDED
                                 advanceTurn()
+                            } else {
+                                currentTurnPhase = TurnPhase.PLAY_OR_DISCARD
                             }
                             updateHint()
                         }
@@ -569,12 +569,11 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
 
                             showGameMessage("Success!")
                             
-                            if (currentTurnPhase == TurnPhase.INITIAL_CHECK || currentTurnPhase == TurnPhase.DRAW) {
-                                currentTurnPhase = TurnPhase.DRAW
-                            } else {
-                                // After showing from end phase, move to ENDED
+                            if (currentTurnPhase == TurnPhase.SHOW_OR_END) {
                                 currentTurnPhase = TurnPhase.ENDED
                                 advanceTurn()
+                            } else {
+                                currentTurnPhase = TurnPhase.PLAY_OR_DISCARD
                             }
                             
                             selectedCards.clear()
