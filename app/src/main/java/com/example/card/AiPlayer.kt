@@ -239,8 +239,10 @@ object AiPlayer {
     fun calculateCardPotential(card: Card, hand: List<Card>, gameState: GameState, player: Int, analysis: HandAnalysis, isAimingForDubli: Boolean = false): Int {
         if (gameState.isJoker(card, player)) return 1000
         
-        val hasShown = gameState.hasShown[player] == true
-        if (hasShown && GameEngine.isMaal(card, gameState.maalCard)) return 800
+        // The player has "shown" ONLY if the flag is true AND they are not in the must-discard phase.
+        val canSeeMaal = gameState.hasShown[player] == true && gameState.playerMustDiscardAfterShow != player
+        
+        if (canSeeMaal && GameEngine.isMaal(card, gameState.maalCard)) return 800
 
         // Dubli Show Logic: Only need one more pair.
         if (gameState.isDubliShow[player] == true) {
@@ -270,7 +272,7 @@ object AiPlayer {
             }
         } else 0
 
-        if (gameState.hasShown[player] == true && !isAimingForDubli) {
+        if (canSeeMaal && !isAimingForDubli) {
             val identicalCount = hand.count { it.rank == card.rank && it.suit == card.suit }
             if (identicalCount >= 2) {
                 pairScore = 10 
@@ -281,7 +283,7 @@ object AiPlayer {
     }
 
     private fun calculateMeldPotential(card: Card, hand: List<Card>, gameState: GameState, player: Int, analysis: HandAnalysis): Int {
-        val hasShown = gameState.hasShown[player] == true
+        val canSeeMaal = gameState.hasShown[player] == true && gameState.playerMustDiscardAfterShow != player
         val hasConsecutiveRun = analysis.consecutiveRunIds.contains(card.id)
         val hasGapRun = analysis.gapRunIds.contains(card.id)
         
@@ -292,7 +294,7 @@ object AiPlayer {
         val sameRankOthers = hand.filter { !it.isSameInstance(card) && it.rank == card.rank && it.suit != card.suit && !gameState.isJoker(it, player) }
         val triplePotential = if (sameRankOthers.isNotEmpty()) {
             val uniqueSuitsCount = (sameRankOthers + card).distinctBy { it.suit }.size
-            if (hasShown) (if (uniqueSuitsCount >= 3) 85 else 80) else 0
+            if (canSeeMaal) (if (uniqueSuitsCount >= 3) 85 else 80) else 0
         } else 0
         return maxOf(suitScore, triplePotential)
     }
@@ -361,15 +363,16 @@ object AiPlayer {
         }
         
         if (gameState.isJoker(bestCard, player) && gameState.isDubliShow[player] != true) return DiscardDecision(bestCard, "Error: AI tried to discard a Joker.")
-        val hasShown = gameState.hasShown[player] == true
+        
+        val canSeeMaal = gameState.hasShown[player] == true && gameState.playerMustDiscardAfterShow != player
         val isDubliShow = gameState.isDubliShow[player] == true
         val analysis = analyzeHand(hand, gameState, player)
         val isProbDecreased = isProbabilityDecreased(bestCard, gameState) && isDubliShow
         
         val reason = when {
             isProbDecreased -> "Discarding ${bestCard.rank.symbol}${bestCard.suit.symbol} because it was already discarded by others, so the chance of forming a pair is decreased."
-            GameEngine.isMaal(bestCard, gameState.maalCard) && hasShown -> "Discarding ${bestCard.rank.symbol}${bestCard.suit.symbol} because it's a Maal card that doesn't fit into your hand."
-            !hasShown && findAllInitialMelds(hand).size >= 3 -> "Discarding ${bestCard.rank.symbol}${bestCard.suit.symbol} to keep your ready-to-show sequences intact."
+            GameEngine.isMaal(bestCard, gameState.maalCard) && canSeeMaal -> "Discarding ${bestCard.rank.symbol}${bestCard.suit.symbol} because it's a Maal card that doesn't fit into your hand."
+            !canSeeMaal && findAllInitialMelds(hand).size >= 3 -> "Discarding ${bestCard.rank.symbol}${bestCard.suit.symbol} to keep your ready-to-show sequences intact."
             analysis.meldedIds.contains(bestCard.id) -> "Discarding ${bestCard.rank.symbol}${bestCard.suit.symbol} from an existing combination to try for something better."
             analysis.identicalMatchIds.contains(bestCard.id) -> "Discarding one ${bestCard.rank.symbol}${bestCard.suit.symbol} from a pair."
             analysis.consecutiveRunIds.contains(bestCard.id) -> "Discarding ${bestCard.rank.symbol}${bestCard.suit.symbol} even though it's near another card, as other options were even less useful."
@@ -384,8 +387,8 @@ object AiPlayer {
         if (gameState.isJoker(card, player)) return DrawDecision(true, "Pick this up! It's a Joker, which can act as any card.")
         
         // Fair hints: Don't reveal Maal value until player has shown.
-        val hasShown = gameState.hasShown[player] == true
-        if (hasShown && GameEngine.isMaal(card, gameState.maalCard)) return DrawDecision(true, "Pick this up! It's a Maal card and will give you points.")
+        val canSeeMaal = gameState.hasShown[player] == true && gameState.playerMustDiscardAfterShow != player
+        if (canSeeMaal && GameEngine.isMaal(card, gameState.maalCard)) return DrawDecision(true, "Pick this up! It's a Maal card and will give you points.")
         
         val hypotheticalHand = hand + card
         val discardSimulation = findCardToDiscard(hypotheticalHand, gameState, player)
@@ -423,7 +426,7 @@ object AiPlayer {
                 }
                 if (areAlreadyMeldedTogether) continue
 
-                if (hasShown) { 
+                if (canSeeMaal) {
                     if (isValidGeneralMeld(card, c2, c3, gameState, player)) return DrawDecision(true, "Pick this up! It completes a combination (sequence or set) in your hand.") 
                 } else { 
                     if (isValidInitialMeld(card, c2, c3)) return DrawDecision(true, "Pick this up! It forms a pure sequence or set needed for your initial show.") 
