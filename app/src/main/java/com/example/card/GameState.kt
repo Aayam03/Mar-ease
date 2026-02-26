@@ -95,8 +95,8 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
     // To prevent AI loops
     val lastDiscardedCardIdByPlayer = mutableStateMapOf<Int, String?>()
 
-    // Callback to open selection dialog in UI
-    var onShowDiscardSelection: ((List<Card>) -> Unit)? = null
+    // Candidates for selection dialog
+    val selectionCandidate = mutableStateListOf<Card>()
 
     // Asynchronous state for UI buttons to avoid ANR
     var canWinWithSelected by mutableStateOf(false)
@@ -128,6 +128,7 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
                         selectedCards.clear()
                         isFirstTurn.clear()
                         lastDiscardedCardIdByPlayer.clear()
+                        selectionCandidate.clear()
                         canWinWithSelected = false
                         playerMustDiscardAfterShow = null
                         
@@ -416,7 +417,7 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
     }
 
     fun humanDiscardsCard(card: Card) {
-        if (isInitializing || currentPlayer != 1 || currentTurnPhase != TurnPhase.PLAY_OR_DISCARD || winner != null) return
+        if (isInitializing || currentPlayer != 1 || (currentTurnPhase != TurnPhase.PLAY_OR_DISCARD && currentTurnPhase != TurnPhase.INITIAL_CHECK) || winner != null) return
         val hand = playerHands[1] ?: return
         if (isJoker(card, 1)) {
             showGameMessage("Don't throw away a Joker!")
@@ -457,6 +458,15 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
         }
     }
 
+    fun humanSelectsCard(card: Card) {
+        humanDiscardsCard(card)
+        clearSelectionCandidate()
+    }
+
+    fun clearSelectionCandidate() {
+        selectionCandidate.clear()
+    }
+
     fun humanShows() {
         if (isInitializing || currentPlayer != 1) return
         val hand = playerHands[1] ?: return
@@ -480,7 +490,7 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
                                 showGameMessage("Dubli Show Success!")
                             } else {
                                 playerMustDiscardAfterShow = 1
-                                showGameMessage("Dubli Show Success! Now discard a card.")
+                                showGameMessage("Success! Now discard a card.")
                             }
                             
                             isDubliShow[1] = true
@@ -772,7 +782,9 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
                             if (winCard != null) {
                                 if (showHints) hint = Hint(title = "Victory!", message = "Discard ${winCard.rank.symbol} to WIN!", cards = listOf(winCard))
                             } else if (hasShown[1] == false) {
-                                if (alreadyShownCount == 0 && dublis.size >= 7) {
+                                if (playerMustDiscardAfterShow == 1) {
+                                    provideDiscardHint(humanHand, isPostShow = true)
+                                } else if (alreadyShownCount == 0 && dublis.size >= 7) {
                                     if (showHints) hint = Hint(title = "Dubli Show", message = "Select 14 cards and SHOW.", cards = dublis.take(7).flatten())
                                 } else {
                                     val reqMelds = 3 - (alreadyShownCount / 3)
@@ -835,16 +847,20 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
         }
     }
 
-    private fun provideDiscardHint(humanHand: List<Card>) {
+    private fun provideDiscardHint(humanHand: List<Card>, isPostShow: Boolean = false) {
         viewModelScope.launch {
             try {
                 val suggested = withContext(Dispatchers.Default) { GameEngine.getSuggestedDiscards(humanHand, this@GameState, 1, difficulty) }
                 withContext(Dispatchers.Main) {
-                    if (suggested.size > 1) {
-                        if (showHints) hint = Hint(title = "Discard Options", message = "Multiple cards are equally worthless. Tap the DISCARD button to choose.", cards = suggested)
-                    } else if (suggested.isNotEmpty()) {
-                        val decision = withContext(Dispatchers.Default) { AiPlayer.findCardToDiscard(humanHand, this@GameState, 1) }
-                        if (showHints) hint = Hint(title = "Discard", message = decision.reason, cards = listOf(decision.card))
+                    if (showHints) {
+                        if (suggested.size > 1 && !isPostShow) {
+                            hint = Hint(title = "Discard Options", message = "Multiple cards are equally worthless. Tap the DISCARD button to choose.", cards = suggested)
+                        } else {
+                            val decision = withContext(Dispatchers.Default) { AiPlayer.findCardToDiscard(humanHand, this@GameState, 1) }
+                            val prefix = if (isPostShow) "You have to discard 1 card to reveal the Maal. Recommended: " else ""
+                            val title = if (isPostShow) "Finalize Show" else "Discard"
+                            hint = Hint(title = title, message = prefix + decision.reason, cards = listOf(decision.card))
+                        }
                     }
                 }
             } catch (e: Exception) {
@@ -860,7 +876,8 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
                 val suggested = withContext(Dispatchers.Default) { GameEngine.getSuggestedDiscards(hand, this@GameState, 1, difficulty) }
                 withContext(Dispatchers.Main) {
                     if (suggested.size > 1) {
-                        onShowDiscardSelection?.invoke(suggested)
+                        selectionCandidate.clear()
+                        selectionCandidate.addAll(suggested)
                     } else if (suggested.isNotEmpty()) {
                         humanDiscardsCard(suggested.first())
                     }
@@ -868,31 +885,6 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
             } catch (e: Exception) {
                 e.printStackTrace()
             }
-        }
-    }
-
-    private suspend fun updateDrawHint(humanHand: List<Card>) {
-        val alreadyShownCount = shownCards[1]?.size ?: 0
-        if (hasShown[1] == false) {
-            val dublis = AiPlayer.findDublis(humanHand)
-            if (alreadyShownCount == 0 && dublis.size >= 4) {
-                val cardFromDiscard = discardPile.lastOrNull()
-                val discardDecision = if (cardFromDiscard != null) withContext(Dispatchers.Default) { AiPlayer.shouldPickFromDiscard(cardFromDiscard, humanHand, this@GameState, 1) } else null
-                if (showHints) hint = Hint(title = "Dubli", message = discardDecision?.reason ?: "Pick from Stock pile.", cards = if (discardDecision?.shouldPick == true) listOf(discardPile.last()) else emptyList())
-                return
-            }
-            val reqMelds = 3 - (alreadyShownCount / 3)
-            val possibleInitial = withContext(Dispatchers.Default) { AiPlayer.findAllInitialMelds(humanHand) }
-            if (possibleInitial.size >= reqMelds) {
-                if (showHints) hint = Hint(title = "Show Before Drawing", message = "Select cards and SHOW.", cards = possibleInitial.take(reqMelds).flatten())
-                return
-            }
-        }
-        val cardFromDiscard = discardPile.lastOrNull()
-        val decision = if (cardFromDiscard != null) withContext(Dispatchers.Default) { AiPlayer.shouldPickFromDiscard(cardFromDiscard, humanHand, this@GameState, 1) } else null
-        if (showHints) {
-            hint = if (decision != null && decision.shouldPick) Hint(title = "Draw Discard", message = decision.reason, cards = listOf(discardPile.last()))
-            else Hint(title = "Draw Stock", message = "Pick from Stock pile.")
         }
     }
 
@@ -935,5 +927,30 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
             for (player in 1..playerCount) if (cardPool.isNotEmpty()) playerHands[player]?.add(cardPool.removeAt(0))
         }
         stockPile.addAll(cardPool)
+    }
+
+    private suspend fun updateDrawHint(humanHand: List<Card>) {
+        val alreadyShownCount = shownCards[1]?.size ?: 0
+        if (hasShown[1] == false) {
+            val dublis = AiPlayer.findDublis(humanHand)
+            if (alreadyShownCount == 0 && dublis.size >= 4) {
+                val cardFromDiscard = discardPile.lastOrNull()
+                val discardDecision = if (cardFromDiscard != null) withContext(Dispatchers.Default) { AiPlayer.shouldPickFromDiscard(cardFromDiscard, humanHand, this@GameState, 1) } else null
+                if (showHints) hint = Hint(title = "Dubli", message = discardDecision?.reason ?: "Pick from Stock pile.", cards = if (discardDecision?.shouldPick == true) listOf(discardPile.last()) else emptyList())
+                return
+            }
+            val reqMelds = 3 - (alreadyShownCount / 3)
+            val possibleInitial = withContext(Dispatchers.Default) { AiPlayer.findAllInitialMelds(humanHand) }
+            if (possibleInitial.size >= reqMelds) {
+                if (showHints) hint = Hint(title = "Show Before Drawing", message = "Select cards and SHOW.", cards = possibleInitial.take(reqMelds).flatten())
+                return
+            }
+        }
+        val cardFromDiscard = discardPile.lastOrNull()
+        val decision = if (cardFromDiscard != null) withContext(Dispatchers.Default) { AiPlayer.shouldPickFromDiscard(cardFromDiscard, humanHand, this@GameState, 1) } else null
+        if (showHints) {
+            hint = if (decision != null && decision.shouldPick) Hint(title = "Draw Discard", message = decision.reason, cards = listOf(discardPile.last()))
+            else Hint(title = "Draw Stock", message = "Pick from Stock pile.")
+        }
     }
 }

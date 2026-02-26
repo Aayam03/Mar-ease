@@ -1,7 +1,6 @@
-package com.example.card
+package com.example.card.screens
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -15,62 +14,46 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.zIndex
-import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.card.Difficulty
+import com.example.card.GameViewModel
 import com.example.card.components.UserProfileIcon
-
-enum class Difficulty(val label: String) {
-    EASY("Easy"),
-    MEDIUM("Medium"),
-    HARD("Hard")
-}
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun PlayerSelectionScreen(
-    viewModel: GameViewModel = viewModel(),
+    viewModel: GameViewModel,
     onBack: () -> Unit = {},
-    onShowHistory: () -> Unit = {},
-    onStartGame: (Int, Difficulty, Boolean) -> Unit
+    onStartGame: (Int, Difficulty) -> Unit
 ) {
     var selectedPlayers by remember { mutableIntStateOf(2) }
     var selectedDifficulty by remember { mutableStateOf(Difficulty.MEDIUM) }
-    var showHints by remember { mutableStateOf(false) }
 
     Box(modifier = Modifier
         .fillMaxSize()
         .background(Color(0xFF1B3D2F)) // Dark green background
     ) {
-        // Header Row for Back and Profile
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(8.dp)
-                .zIndex(1f), // Ensure it's above the scrollable column
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+        // Back Button
+        IconButton(
+            onClick = onBack,
+            modifier = Modifier.align(Alignment.TopStart).padding(16.dp)
         ) {
-            IconButton(
-                onClick = onBack,
-                modifier = Modifier.padding(8.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "Back",
-                    tint = Color.White
-                )
-            }
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                contentDescription = "Back",
+                tint = Color.White
+            )
+        }
 
-            UserProfileIcon(showHints = false, viewModel = viewModel, onShowHistory = onShowHistory)
+        Box(modifier = Modifier.align(Alignment.TopEnd).padding(16.dp)) {
+            UserProfileIcon(showHints = false, viewModel = viewModel)
         }
 
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(top = 80.dp) // Leave space for header
-                .padding(horizontal = 16.dp)
+                .padding(16.dp)
                 .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(24.dp, Alignment.Top),
+            verticalArrangement = Arrangement.spacedBy(24.dp, Alignment.CenterVertically),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
@@ -131,27 +114,9 @@ fun PlayerSelectionScreen(
                     }
                 }
             }
-
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
-                modifier = Modifier
-                    .padding(8.dp)
-                    .clickable { showHints = !showHints }
-            ) {
-                Text("Learn Mode (Hints)", color = Color.White, fontSize = 16.sp)
-                Switch(
-                    checked = showHints,
-                    onCheckedChange = { showHints = it },
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = Color(0xFF1976D2),
-                        checkedTrackColor = Color(0xFF1976D2).copy(alpha = 0.5f)
-                    )
-                )
-            }
             
             Button(
-                onClick = { onStartGame(selectedPlayers, selectedDifficulty, showHints) },
+                onClick = { onStartGame(selectedPlayers, selectedDifficulty) },
                 modifier = Modifier
                     .width(250.dp)
                     .height(60.dp),
@@ -165,7 +130,7 @@ fun PlayerSelectionScreen(
             }
             
             // Extra spacer to ensure scrolling works well on small screens
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(16.dp))
         }
     }
 }

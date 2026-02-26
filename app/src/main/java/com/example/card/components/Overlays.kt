@@ -54,6 +54,62 @@ import com.example.card.GameState
 import com.example.card.TurnPhase
 import com.example.card.Rank
 import com.example.card.Difficulty
+import com.example.card.GameViewModel
+
+@Composable
+fun OverlayManager(
+    viewModel: GameViewModel,
+    gameState: GameState,
+    navController: NavController,
+    selectedPlayerForShowView: Int?,
+    cardHeight: androidx.compose.ui.unit.Dp,
+    cardWidth: androidx.compose.ui.unit.Dp,
+    onDismissShowView: () -> Unit
+) {
+    if (viewModel.showPauseMenu) {
+        PauseMenuOverlay(
+            onResume = { viewModel.togglePauseMenu(false) },
+            onGoBack = { navController.popBackStack() },
+            onLearnFromStart = {
+                viewModel.togglePauseMenu(false)
+                gameState.setupGame(gameState.playerCount, gameState.difficulty)
+            }
+        )
+    }
+
+    if (viewModel.showHelp) {
+        BasicsOverlay(
+            hasShown = gameState.hasShown[1] ?: false,
+            onDismiss = { viewModel.toggleHelp(false) }
+        )
+    }
+
+    if (viewModel.showDubliOverlay) {
+        DubliStrategyOverlay(onDismiss = { viewModel.showDubliOverlay = false })
+    }
+
+    if (gameState.selectionCandidate.isNotEmpty()) {
+        SelectionDialog(
+            candidates = gameState.selectionCandidate,
+            onSelected = { card -> gameState.humanSelectsCard(card) },
+            onDismiss = { gameState.clearSelectionCandidate() }
+        )
+    }
+
+    if (gameState.winner != null) {
+        GameEndOverlay(gameState = gameState, navController = navController)
+    }
+
+    if (selectedPlayerForShowView != null) {
+        ShownCardsView(
+            player = selectedPlayerForShowView,
+            gameState = gameState,
+            cardHeight = cardHeight,
+            cardWidth = cardWidth,
+            onDismiss = onDismissShowView
+        )
+    }
+}
 
 @Composable
 fun PauseMenuOverlay(onResume: () -> Unit, onGoBack: () -> Unit, onLearnFromStart: () -> Unit) {
@@ -617,6 +673,7 @@ fun ShownCardsView(
             modifier = Modifier.padding(16.dp).fillMaxHeight(0.8f),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
         ) {
+            @Suppress("DEPRECATION")
             Column(
                 modifier = Modifier.padding(16.dp).verticalScroll(scrollState), 
                 horizontalAlignment = Alignment.CenterHorizontally

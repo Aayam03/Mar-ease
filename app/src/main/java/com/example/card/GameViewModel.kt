@@ -9,6 +9,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.launch
@@ -16,8 +17,18 @@ import kotlinx.coroutines.launch
 data class UserStats(
     val learnGames: Int = 0,
     val learnPoints: Int = 0,
-    val playGames: Int = 0,
-    val playPoints: Int = 0
+    val easyGames: Int = 0,
+    val easyPoints: Int = 0,
+    val mediumGames: Int = 0,
+    val mediumPoints: Int = 0,
+    val hardGames: Int = 0,
+    val hardPoints: Int = 0
+)
+
+data class GameRecord(
+    val mode: String = "",
+    val points: Int = 0,
+    val timestamp: Long = 0L
 )
 
 class GameViewModel : ViewModel() {
@@ -40,11 +51,15 @@ class GameViewModel : ViewModel() {
     var userStats by mutableStateOf(UserStats())
         private set
 
+    var gameHistory = mutableStateListOf<GameRecord>()
+        private set
+
     private val db = FirebaseFirestore.getInstance()
     private val auth = FirebaseAuth.getInstance()
 
     init {
         fetchUserStats()
+        fetchGameHistory()
     }
 
     private fun fetchUserStats() {
@@ -56,8 +71,12 @@ class GameViewModel : ViewModel() {
                     userStats = UserStats(
                         learnGames = (document.getLong("learnGames") ?: 0).toInt(),
                         learnPoints = (document.getLong("learnPoints") ?: 0).toInt(),
-                        playGames = (document.getLong("playGames") ?: 0).toInt(),
-                        playPoints = (document.getLong("playPoints") ?: 0).toInt()
+                        easyGames = (document.getLong("easyGames") ?: 0).toInt(),
+                        easyPoints = (document.getLong("easyPoints") ?: 0).toInt(),
+                        mediumGames = (document.getLong("mediumGames") ?: 0).toInt(),
+                        mediumPoints = (document.getLong("mediumPoints") ?: 0).toInt(),
+                        hardGames = (document.getLong("hardGames") ?: 0).toInt(),
+                        hardPoints = (document.getLong("hardPoints") ?: 0).toInt()
                     )
                 }
             } catch (e: Exception) {
@@ -66,25 +85,67 @@ class GameViewModel : ViewModel() {
         }
     }
 
-    fun updateStats(isLearnMode: Boolean, pointsGained: Int) {
+    private fun fetchGameHistory() {
+        val userId = auth.currentUser?.uid ?: return
+        viewModelScope.launch {
+            try {
+                val snapshot = db.collection("users").document(userId).collection("history")
+                    .orderBy("timestamp", Query.Direction.DESCENDING)
+                    .limit(50)
+                    .get().await()
+                
+                gameHistory.clear()
+                val records = snapshot.toObjects(GameRecord::class.java)
+                gameHistory.addAll(records)
+            } catch (e: Exception) {
+                // Handle error
+            }
+        }
+    }
+
+    fun updateStats(isLearnMode: Boolean, difficulty: Difficulty, pointsGained: Int) {
         val userId = auth.currentUser?.uid ?: return
         val currentStats = userStats
+        val modeStr = if (isLearnMode) "LEARN" else difficulty.name
+        
         val newStats = if (isLearnMode) {
             currentStats.copy(
                 learnGames = currentStats.learnGames + 1,
                 learnPoints = currentStats.learnPoints + pointsGained
             )
         } else {
-            currentStats.copy(
-                playGames = currentStats.playGames + 1,
-                playPoints = currentStats.playPoints + pointsGained
-            )
+            when (difficulty) {
+                Difficulty.EASY -> currentStats.copy(
+                    easyGames = currentStats.easyGames + 1,
+                    easyPoints = currentStats.easyPoints + pointsGained
+                )
+                Difficulty.MEDIUM -> currentStats.copy(
+                    mediumGames = currentStats.mediumGames + 1,
+                    mediumPoints = currentStats.mediumPoints + pointsGained
+                )
+                Difficulty.HARD -> currentStats.copy(
+                    hardGames = currentStats.hardGames + 1,
+                    hardPoints = currentStats.hardPoints + pointsGained
+                )
+            }
         }
+
+        val newRecord = GameRecord(
+            mode = modeStr,
+            points = pointsGained,
+            timestamp = System.currentTimeMillis()
+        )
 
         viewModelScope.launch {
             try {
+                // Update totals
                 db.collection("users").document(userId).set(newStats, SetOptions.merge()).await()
+                
+                // Add to history
+                db.collection("users").document(userId).collection("history").add(newRecord).await()
+                
                 userStats = newStats
+                gameHistory.add(0, newRecord)
             } catch (e: Exception) {
                 // Handle error
             }
