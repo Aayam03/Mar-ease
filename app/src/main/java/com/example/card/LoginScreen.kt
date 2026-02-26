@@ -1,6 +1,7 @@
 package com.example.card
 
 import android.app.Activity
+import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -54,10 +55,12 @@ fun LoginScreen(navController: NavController) {
                             }
                         } else {
                             isLoading = false
+                            Log.e("LoginScreen", "Google Sign-In failed", task.exception)
                         }
                     }
             } catch (e: ApiException) {
                 isLoading = false
+                Log.e("LoginScreen", "Google API Exception", e)
             }
         } else {
             isLoading = false
@@ -118,8 +121,20 @@ fun LoginScreen(navController: NavController) {
 
                 OutlinedButton(
                     onClick = {
-                        navController.navigate("startup") {
-                            popUpTo("login") { inclusive = true }
+                        isLoading = true
+                        auth.signInAnonymously().addOnCompleteListener { task ->
+                            if (task.isSuccessful) {
+                                navController.navigate("startup") {
+                                    popUpTo("login") { inclusive = true }
+                                }
+                            } else {
+                                isLoading = false
+                                Log.e("LoginScreen", "Anonymous Sign-In failed. Make sure it is enabled in Firebase Console.", task.exception)
+                                // Fallback for offline testing
+                                navController.navigate("startup") {
+                                    popUpTo("login") { inclusive = true }
+                                }
+                            }
                         }
                     },
                     modifier = Modifier

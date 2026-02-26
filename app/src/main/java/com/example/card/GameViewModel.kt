@@ -1,5 +1,6 @@
 package com.example.card
 
+import android.util.Log
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
@@ -57,7 +58,26 @@ class GameViewModel : ViewModel() {
     private val db = FirebaseFirestore.getInstance()
     private val auth = FirebaseAuth.getInstance()
 
+    private val authListener = FirebaseAuth.AuthStateListener {
+        if (it.currentUser != null) {
+            refreshData()
+        } else {
+            userStats = UserStats()
+            gameHistory.clear()
+        }
+    }
+
     init {
+        auth.addAuthStateListener(authListener)
+        refreshData()
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        auth.removeAuthStateListener(authListener)
+    }
+
+    fun refreshData() {
         fetchUserStats()
         fetchGameHistory()
     }
@@ -80,7 +100,7 @@ class GameViewModel : ViewModel() {
                     )
                 }
             } catch (e: Exception) {
-                // Handle error
+                Log.e("GameViewModel", "Error fetching user stats", e)
             }
         }
     }
@@ -98,13 +118,16 @@ class GameViewModel : ViewModel() {
                 val records = snapshot.toObjects(GameRecord::class.java)
                 gameHistory.addAll(records)
             } catch (e: Exception) {
-                // Handle error
+                Log.e("GameViewModel", "Error fetching game history", e)
             }
         }
     }
 
     fun updateStats(isLearnMode: Boolean, difficulty: Difficulty, pointsGained: Int) {
-        val userId = auth.currentUser?.uid ?: return
+        val userId = auth.currentUser?.uid ?: run {
+            Log.w("GameViewModel", "No user logged in, stats not saved.")
+            return
+        }
         val currentStats = userStats
         val modeStr = if (isLearnMode) "LEARN" else difficulty.name
         
@@ -140,14 +163,15 @@ class GameViewModel : ViewModel() {
             try {
                 // Update totals
                 db.collection("users").document(userId).set(newStats, SetOptions.merge()).await()
-                
+
                 // Add to history
                 db.collection("users").document(userId).collection("history").add(newRecord).await()
-                
+
                 userStats = newStats
                 gameHistory.add(0, newRecord)
+                Log.d("GameViewModel", "Successfully updated Firebase with new game record.")
             } catch (e: Exception) {
-                // Handle error
+                Log.e("GameViewModel", "Error updating stats in Firebase", e)
             }
         }
     }

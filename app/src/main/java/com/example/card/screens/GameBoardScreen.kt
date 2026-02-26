@@ -89,7 +89,7 @@ fun GameBoardScreen(
             }
             LaunchedEffect(hasHints) {
                 if (hasHints && viewModel.explainedHighlights["red"] != true) {
-                    gameState.showGameMessage("Red Highlight: Points to cards suggested by the hint.")
+                    gameState.showGameMessage("Red Highlight: Points to cards suggested by the hint to Discard.")
                     viewModel.markHighlightExplained("red")
                 }
             }
