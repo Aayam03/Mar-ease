@@ -129,7 +129,7 @@ fun GameBoardScreen(
                 )
                 
                 val p1Result = results.playerResults.find { it.player == 1 }
-                val p1Points = p1Result?.totalPoints ?: 0
+                val p1Points = p1Result?.adjustment ?: 0
                 
                 viewModel.updateStats(showHints, difficulty, p1Points)
             }
