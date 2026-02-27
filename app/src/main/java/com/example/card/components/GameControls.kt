@@ -6,8 +6,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
@@ -26,16 +24,7 @@ fun GameControls(
                 .padding(16.dp)
                 .clickable { onPauseClick() }
         )
-
-        if (showHints) {
-            IconButton(
-                onClick = onHelpClick,
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(16.dp)
-            ) {
-                Text("?", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Color.White)
-            }
-        }
+        
+        // Help icon removed as part of Learn Mode removal
     }
 }

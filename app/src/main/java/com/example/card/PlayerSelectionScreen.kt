@@ -31,11 +31,10 @@ fun PlayerSelectionScreen(
     viewModel: GameViewModel = viewModel(),
     onBack: () -> Unit = {},
     onShowHistory: () -> Unit = {},
-    onStartGame: (Int, Difficulty, Boolean) -> Unit
+    onStartGame: (Int, Difficulty) -> Unit
 ) {
     var selectedPlayers by remember { mutableIntStateOf(2) }
     var selectedDifficulty by remember { mutableStateOf(Difficulty.MEDIUM) }
-    var showHints by remember { mutableStateOf(false) }
 
     Box(modifier = Modifier
         .fillMaxSize()
@@ -131,27 +130,9 @@ fun PlayerSelectionScreen(
                     }
                 }
             }
-
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
-                modifier = Modifier
-                    .padding(8.dp)
-                    .clickable { showHints = !showHints }
-            ) {
-                Text("Learn Mode (Hints)", color = Color.White, fontSize = 16.sp)
-                Switch(
-                    checked = showHints,
-                    onCheckedChange = { showHints = it },
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = Color(0xFF1976D2),
-                        checkedTrackColor = Color(0xFF1976D2).copy(alpha = 0.5f)
-                    )
-                )
-            }
             
             Button(
-                onClick = { onStartGame(selectedPlayers, selectedDifficulty, showHints) },
+                onClick = { onStartGame(selectedPlayers, selectedDifficulty) },
                 modifier = Modifier
                     .width(250.dp)
                     .height(60.dp),

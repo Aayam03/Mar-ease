@@ -51,7 +51,7 @@ data class Hint(
     val cards: List<Card> = emptyList()
 )
 
-class GameState(private val viewModelScope: CoroutineScope, val showHints: Boolean) {
+class GameState(private val viewModelScope: CoroutineScope) {
 
     val playerHands = mutableStateMapOf<Int, SnapshotStateList<Card>>()
     val shownCards = mutableStateMapOf<Int, SnapshotStateList<Card>>()
@@ -714,113 +714,17 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
 
     private fun updateHint() {
         if (isInitializing || currentPlayer != 1 || winner != null) {
-            if (!showHints) {
-                hint = null
-                meldedCards.clear()
-                dubliCards.clear()
-            }
+            hint = null
+            meldedCards.clear()
+            dubliCards.clear()
             if (currentTurnPhase == TurnPhase.PLAY_OR_DISCARD || currentTurnPhase == TurnPhase.INITIAL_CHECK) {
                 updateCanWinStatus()
             }
             return
         }
         
-        val humanHand = playerHands[1]?.toList() ?: return
-        val alreadyShownCount = shownCards[1]?.size ?: 0
-        viewModelScope.launch {
-            try {
-                val dublis = withContext(Dispatchers.Default) { AiPlayer.findDublis(humanHand) }
-                val melds = withContext(Dispatchers.Default) { 
-                    val initialShow = hasShown[1] == false
-                    val m = mutableListOf<List<Card>>()
-                    val used = java.util.BitSet(humanHand.size)
-                    while (true) {
-                        val indices = findMeldsGreedyIndices(humanHand, used, initialShow) ?: break
-                        m.add(indices.map { humanHand[it] })
-                        indices.forEach { used.set(it) }
-                    }
-                    m
-                }
-                
-                withContext(Dispatchers.Main) {
-                    if (showHints) {
-                        meldedCards.clear()
-                        meldedCards.addAll(melds.flatten())
-                        dubliCards.clear()
-                        if (dublis.size >= 4 && hasShown[1] == false && alreadyShownCount == 0) {
-                            dubliCards.addAll(dublis.flatten())
-                        }
-                    }
-
-                    when (currentTurnPhase) {
-                        TurnPhase.INITIAL_CHECK -> {
-                            val jokers = humanHand.filter { it.rank == Rank.JOKER }
-                            val identical = humanHand.groupBy { it.rank to it.suit }.filter { it.value.size >= 3 }
-                            
-                            val reqMelds = 3 - (alreadyShownCount / 3)
-                            val possibleInitial = withContext(Dispatchers.Default) { AiPlayer.findAllInitialMelds(humanHand) }
-                            
-                            if (jokers.size >= 3 && alreadyShownCount == 0) {
-                                if (showHints) hint = Hint(title = "Tunnel!", message = "You have a Joker Tunnel! Select 3 Jokers and SHOW to get points. Even after this, you'll need to show 3 sequences to reveal Maal.", cards = jokers.take(3))
-                            } else if (identical.isNotEmpty() && alreadyShownCount == 0) {
-                                if (showHints) hint = Hint(title = "Tunnel!", message = "You have an Identical Tunnel! Select 3 identical cards and SHOW to get points. Even after this, you'll need to show 3 sequences to reveal Maal.", cards = identical.values.first().take(3))
-                            } else if (dublis.size >= 7 && alreadyShownCount == 0 && hasShown[1] == false) {
-                                if (showHints) hint = Hint(title = "Dubli Show", message = "You have 7 pairs! Select 14 cards and SHOW to reveal Maal.", cards = dublis.take(7).flatten())
-                            } else if (possibleInitial.size >= reqMelds && reqMelds > 0) {
-                                if (showHints) hint = Hint(title = "Ready to Show", message = "You already have the required pure melds! Select ${reqMelds * 3} cards and SHOW to reveal Maal.", cards = possibleInitial.take(reqMelds).flatten())
-                            } else {
-                                updateDrawHint(humanHand)
-                            }
-                            updateCanWinStatus()
-                        }
-                        TurnPhase.DRAW -> updateDrawHint(humanHand)
-                        TurnPhase.PLAY_OR_DISCARD -> {
-                            val winCard = withContext(Dispatchers.Default) {
-                                humanHand.find { card -> AiPlayer.canFinish(humanHand.filter { it !== card }, this@GameState, 1) }
-                            }
-                            
-                            if (winCard != null) {
-                                if (showHints) hint = Hint(title = "Victory!", message = "Discard ${winCard.rank.symbol} to WIN!", cards = listOf(winCard))
-                            } else if (hasShown[1] == false) {
-                                if (playerMustDiscardAfterShow == 1) {
-                                    provideDiscardHint(humanHand, isPostShow = true)
-                                } else if (alreadyShownCount == 0 && dublis.size >= 7) {
-                                    if (showHints) hint = Hint(title = "Dubli Show", message = "Select 14 cards and SHOW.", cards = dublis.take(7).flatten())
-                                } else {
-                                    val reqMelds = 3 - (alreadyShownCount / 3)
-                                    val possibleInitial = withContext(Dispatchers.Default) { AiPlayer.findAllInitialMelds(humanHand) }
-                                    if (possibleInitial.size >= reqMelds) {
-                                        if (showHints) hint = Hint(title = "Ready to Show", message = "Select ${reqMelds * 3} cards and SHOW.", cards = possibleInitial.take(reqMelds).flatten())
-                                    } else {
-                                        provideDiscardHint(humanHand)
-                                    }
-                                }
-                            } else {
-                                provideDiscardHint(humanHand)
-                            }
-                            updateCanWinStatus()
-                        }
-                        TurnPhase.SHOW_OR_END -> {
-                            if (showHints) {
-                                hint = if (hasShown[1] == true) {
-                                    Hint(title = "End Turn", message = "Press END TURN.")
-                                } else {
-                                    val reqMelds = 3 - (alreadyShownCount / 3)
-                                    val possibleInitial = withContext(Dispatchers.Default) { AiPlayer.findAllInitialMelds(humanHand) }
-                                    if (possibleInitial.size >= reqMelds) {
-                                        Hint(title = "Show Now?", message = "Select cards and SHOW.", cards = possibleInitial.take(reqMelds).flatten())
-                                    } else {
-                                        Hint(title = "Strategy", message = "End your turn.")
-                                    }
-                                }
-                            }
-                        }
-                        else -> hint = null
-                    }
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
+        if (currentTurnPhase == TurnPhase.PLAY_OR_DISCARD || currentTurnPhase == TurnPhase.INITIAL_CHECK) {
+            updateCanWinStatus()
         }
     }
 
@@ -847,28 +751,6 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
         }
     }
 
-    private fun provideDiscardHint(humanHand: List<Card>, isPostShow: Boolean = false) {
-        viewModelScope.launch {
-            try {
-                val suggested = withContext(Dispatchers.Default) { GameEngine.getSuggestedDiscards(humanHand, this@GameState, 1, difficulty) }
-                withContext(Dispatchers.Main) {
-                    if (showHints) {
-                        if (suggested.size > 1 && !isPostShow) {
-                            hint = Hint(title = "Discard Options", message = "Multiple cards are equally worthless. Tap the DISCARD button to choose.", cards = suggested)
-                        } else {
-                            val decision = withContext(Dispatchers.Default) { AiPlayer.findCardToDiscard(humanHand, this@GameState, 1) }
-                            val prefix = if (isPostShow) "You have to discard 1 card to reveal the Maal. Recommended: " else ""
-                            val title = if (isPostShow) "Finalize Show" else "Discard"
-                            hint = Hint(title = title, message = prefix + decision.reason, cards = listOf(decision.card))
-                        }
-                    }
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }
-    }
-
     fun requestDiscardSelection() {
         val hand = playerHands[1]?.toList() ?: return
         viewModelScope.launch {
@@ -886,24 +768,6 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
                 e.printStackTrace()
             }
         }
-    }
-
-    private fun findMeldsGreedyIndices(cards: List<Card>, used: java.util.BitSet, initialShow: Boolean): List<Int>? {
-        val indices = mutableListOf<Int>()
-        for (i in cards.indices) if (!used.get(i)) indices.add(i)
-        if (indices.size < 3) return null
-        for (i in indices.indices) {
-            for (j in i + 1 until indices.size) {
-                for (k in j + 1 until indices.size) {
-                    val isValid = if (initialShow) AiPlayer.isValidInitialMeld(cards[indices[i]], cards[indices[j]], cards[indices[k]])
-                                 else AiPlayer.isValidGeneralMeld(cards[indices[i]], cards[indices[j]], cards[indices[k]], this, 1)
-                    if (isValid) {
-                        return listOf(indices[i], indices[j], indices[k])
-                    }
-                }
-            }
-        }
-        return null
     }
 
     private fun createCardPool(deckCount: Int, jokerCount: Int): MutableList<Card> {
@@ -927,30 +791,5 @@ class GameState(private val viewModelScope: CoroutineScope, val showHints: Boole
             for (player in 1..playerCount) if (cardPool.isNotEmpty()) playerHands[player]?.add(cardPool.removeAt(0))
         }
         stockPile.addAll(cardPool)
-    }
-
-    private suspend fun updateDrawHint(humanHand: List<Card>) {
-        val alreadyShownCount = shownCards[1]?.size ?: 0
-        if (hasShown[1] == false) {
-            val dublis = AiPlayer.findDublis(humanHand)
-            if (alreadyShownCount == 0 && dublis.size >= 4) {
-                val cardFromDiscard = discardPile.lastOrNull()
-                val discardDecision = if (cardFromDiscard != null) withContext(Dispatchers.Default) { AiPlayer.shouldPickFromDiscard(cardFromDiscard, humanHand, this@GameState, 1) } else null
-                if (showHints) hint = Hint(title = "Dubli", message = discardDecision?.reason ?: "Pick from Stock pile.", cards = if (discardDecision?.shouldPick == true) listOf(discardPile.last()) else emptyList())
-                return
-            }
-            val reqMelds = 3 - (alreadyShownCount / 3)
-            val possibleInitial = withContext(Dispatchers.Default) { AiPlayer.findAllInitialMelds(humanHand) }
-            if (possibleInitial.size >= reqMelds) {
-                if (showHints) hint = Hint(title = "Show Before Drawing", message = "Select cards and SHOW.", cards = possibleInitial.take(reqMelds).flatten())
-                return
-            }
-        }
-        val cardFromDiscard = discardPile.lastOrNull()
-        val decision = if (cardFromDiscard != null) withContext(Dispatchers.Default) { AiPlayer.shouldPickFromDiscard(cardFromDiscard, humanHand, this@GameState, 1) } else null
-        if (showHints) {
-            hint = if (decision != null && decision.shouldPick) Hint(title = "Draw Discard", message = decision.reason, cards = listOf(discardPile.last()))
-            else Hint(title = "Draw Stock", message = "Pick from Stock pile.")
-        }
     }
 }

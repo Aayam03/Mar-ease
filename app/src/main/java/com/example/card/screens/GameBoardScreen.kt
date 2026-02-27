@@ -29,18 +29,16 @@ import kotlinx.coroutines.delay
 fun GameBoardScreen(
     playerCount: Int, 
     difficulty: Difficulty,
-    showHints: Boolean, 
     navController: NavController,
     viewModel: GameViewModel
 ) {
-    LaunchedEffect(playerCount, showHints, difficulty) {
-        viewModel.initGame(playerCount, showHints, difficulty)
+    LaunchedEffect(playerCount, difficulty) {
+        viewModel.initGame(playerCount, false, difficulty)
     }
 
     val gameState = viewModel.gameState ?: return
 
-    val themeDifficulty = if (showHints) Difficulty.EASY else difficulty
-    CardTheme(difficulty = themeDifficulty) {
+    CardTheme(difficulty = difficulty) {
         val config = LocalConfiguration.current
         val screenHeight = config.screenHeightDp.dp
         
@@ -61,59 +59,6 @@ fun GameBoardScreen(
             }
         }
 
-        // Explaining Highlights in Learn Mode
-        if (showHints) {
-            val lastDrawn = gameState.lastDrawnCard
-            val hasMelds = gameState.meldedCards.isNotEmpty()
-            val hasSelection = gameState.selectedCards.isNotEmpty()
-            val hasHints = gameState.hint?.cards?.isNotEmpty() == true
-            val hasJokers = gameState.hasShown[1] == true && (gameState.playerHands[1]?.any { gameState.isJoker(it, 1) } == true)
-
-            LaunchedEffect(lastDrawn) {
-                if (lastDrawn != null && viewModel.explainedHighlights["yellow"] != true) {
-                    gameState.showGameMessage("Yellow Highlight: Indicates the card you just drew.")
-                    viewModel.markHighlightExplained("yellow")
-                }
-            }
-            LaunchedEffect(hasMelds) {
-                if (hasMelds && viewModel.explainedHighlights["green"] != true) {
-                    gameState.showGameMessage("Green Highlight: Identifies cards that are part of a valid sequence or set.")
-                    viewModel.markHighlightExplained("green")
-                }
-            }
-            LaunchedEffect(hasSelection) {
-                if (hasSelection && viewModel.explainedHighlights["pink"] != true) {
-                    gameState.showGameMessage("Pink Highlight: Shows the cards you've currently selected.")
-                    viewModel.markHighlightExplained("pink")
-                }
-            }
-            LaunchedEffect(hasHints) {
-                if (hasHints && viewModel.explainedHighlights["red"] != true) {
-                    gameState.showGameMessage("Red Highlight: Points to cards suggested by the hint to Discard.")
-                    viewModel.markHighlightExplained("red")
-                }
-            }
-            LaunchedEffect(hasJokers) {
-                if (hasJokers && viewModel.explainedHighlights["cyan"] != true) {
-                    gameState.showGameMessage("Cyan Highlight: Marks cards that have become Jokers after Maal revelation.")
-                    viewModel.markHighlightExplained("cyan")
-                }
-            }
-
-            // Contextual Dubli Strategy Hint
-            val myHand = gameState.playerHands[1]?.toList() ?: emptyList()
-            LaunchedEffect(myHand, gameState.currentTurnPhase) {
-                if (!viewModel.explainedDubliStrategy && 
-                    gameState.currentTurnPhase == TurnPhase.PLAY_OR_DISCARD &&
-                    AiPlayer.isAimingForDubli(1, myHand, gameState)) {
-                    
-                    delay(1000)
-                    viewModel.markDubliStrategyExplained()
-                    viewModel.showDubliOverlay = true
-                }
-            }
-        }
-
         LaunchedEffect(gameState.winner) {
             if (gameState.winner != null) {
                 // Calculate points for the human player (P1)
@@ -131,7 +76,7 @@ fun GameBoardScreen(
                 val p1Result = results.playerResults.find { it.player == 1 }
                 val p1Points = p1Result?.adjustment ?: 0
                 
-                viewModel.updateStats(showHints, difficulty, p1Points)
+                viewModel.updateStats(false, difficulty, p1Points)
             }
         }
 
@@ -139,44 +84,22 @@ fun GameBoardScreen(
             if (gameState.isInitializing) {
                 LoadingScreen()
             } else {
-                if (showHints) {
-                    MainGameLayoutLearn(
-                        gameState = gameState,
-                        cardHeight = cardHeight,
-                        cardWidth = cardWidth,
-                        onStockPilePositioned = { stockPilePos = it },
-                        onDiscardPilePositioned = { discardPilePos = it },
-                        onPlayerIconPositioned = { p, pos -> playerPositions[p] = pos },
-                        onToggleShowView = { p -> selectedPlayerForShowView = p },
-                        onHandPositioned = { myHandPos = it }
-                    )
-                } else {
-                    MainGameLayoutPlay(
-                        gameState = gameState,
-                        cardHeight = cardHeight,
-                        cardWidth = cardWidth,
-                        onStockPilePositioned = { stockPilePos = it },
-                        onDiscardPilePositioned = { discardPilePos = it },
-                        onPlayerIconPositioned = { p, pos -> playerPositions[p] = pos },
-                        onToggleShowView = { p -> selectedPlayerForShowView = p },
-                        onHandPositioned = { myHandPos = it }
-                    )
-                }
+                MainGameLayoutPlay(
+                    gameState = gameState,
+                    cardHeight = cardHeight,
+                    cardWidth = cardWidth,
+                    onStockPilePositioned = { stockPilePos = it },
+                    onDiscardPilePositioned = { discardPilePos = it },
+                    onPlayerIconPositioned = { p, pos -> playerPositions[p] = pos },
+                    onToggleShowView = { p -> selectedPlayerForShowView = p },
+                    onHandPositioned = { myHandPos = it }
+                )
 
                 Box(modifier = Modifier.fillMaxSize()) {
                     Box(modifier = Modifier.align(Alignment.TopEnd)) {
-                        UserProfileIcon(showHints, viewModel, onShowHistory = { navController.navigate("history") })
+                        UserProfileIcon(false, viewModel, onShowHistory = { navController.navigate("history") })
                     }
                     
-                    if (showHints && gameState.hint != null) {
-                        HintView(
-                            hint = gameState.hint,
-                            modifier = Modifier
-                                .align(Alignment.BottomEnd)
-                                .padding(bottom = cardHeight + 80.dp, end = 16.dp)
-                        )
-                    }
-
                     // Game Messages Overlay
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         AnimatedVisibility(
@@ -203,7 +126,7 @@ fun GameBoardScreen(
                 }
 
                 GameControls(
-                    showHints = showHints,
+                    showHints = false,
                     onPauseClick = { viewModel.togglePauseMenu(true) },
                     onHelpClick = { viewModel.toggleHelp(true) }
                 )
@@ -227,48 +150,6 @@ fun GameBoardScreen(
                 cardHeight = cardHeight,
                 cardWidth = cardWidth,
                 onDismissShowView = { selectedPlayerForShowView = null }
-            )
-        }
-    }
-}
-
-@Composable
-fun MainGameLayoutLearn(
-    gameState: GameState,
-    cardHeight: androidx.compose.ui.unit.Dp,
-    cardWidth: androidx.compose.ui.unit.Dp,
-    onStockPilePositioned: (Offset) -> Unit,
-    onDiscardPilePositioned: (Offset) -> Unit,
-    onPlayerIconPositioned: (Int, Offset) -> Unit,
-    onToggleShowView: (Int) -> Unit,
-    onHandPositioned: (Offset) -> Unit
-) {
-    Column(modifier = Modifier.fillMaxSize()) {
-        Box(modifier = Modifier.weight(1.3f).fillMaxWidth()) {
-            TopAreaView(
-                gameState = gameState,
-                cardHeight = cardHeight,
-                cardWidth = cardWidth,
-                onStockPilePositioned = onStockPilePositioned,
-                onDiscardPilePositioned = onDiscardPilePositioned,
-                onPlayerIconPositioned = onPlayerIconPositioned,
-                onToggleShowView = onToggleShowView
-            )
-        }
-        Box(modifier = Modifier.height(70.dp).fillMaxWidth(), contentAlignment = Alignment.Center) {
-            ActionButtons(gameState)
-        }
-        Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-            PlayerHandView(
-                hand = gameState.playerHands[1] ?: emptyList(),
-                cardHeight = cardHeight,
-                cardWidth = cardWidth,
-                selectedCards = gameState.selectedCards,
-                highlightedCards = gameState.hint?.cards ?: emptyList(),
-                onCardClick = { card -> gameState.toggleCardSelection(card) },
-                isJokerSeen = gameState.hasShown[1] ?: false,
-                gameState = gameState,
-                onHandPositioned = onHandPositioned
             )
         }
     }

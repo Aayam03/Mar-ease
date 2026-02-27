@@ -7,9 +7,7 @@ import kotlin.random.Random
 data class DiscardDecision(val card: Card, val reason: String)
 data class DrawDecision(val shouldPick: Boolean, val reason: String)
 
-/**
- * Pre-calculated analysis of a hand to avoid O(N^2) checks inside loops.
- */
+
 data class HandAnalysis(
     val meldedIds: Set<String>,
     val consecutiveRunIds: Set<String>,
@@ -21,9 +19,7 @@ data class HandAnalysis(
 
 object AiPlayer {
 
-    /**
-     * Strategic check: Only prioritize Dubli if we have a very strong start for it.
-     */
+
     fun isAimingForDubli(player: Int, hand: List<Card>, gameState: GameState): Boolean {
         if (gameState.hasShown[player] == true && gameState.isDubliShow[player] != true) return false
         if (gameState.isDubliShow[player] == true) return true

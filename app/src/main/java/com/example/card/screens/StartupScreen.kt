@@ -38,12 +38,11 @@ fun StartupScreen(navController: NavController, viewModel: GameViewModel) {
                 modifier = Modifier.size(logoSize)
             )
             Spacer(modifier = Modifier.height(32.dp))
-            Button(onClick = { navController.navigate("game_board/4/HARD/true") }) {
-                Text("Learn", fontSize = 18.sp)
-            }
-            Spacer(modifier = Modifier.height(16.dp))
-            Button(onClick = { navController.navigate("player_selection") }) {
-                Text("Play", fontSize = 18.sp)
+            Button(
+                onClick = { navController.navigate("player_selection") },
+                modifier = Modifier.width(200.dp).height(50.dp)
+            ) {
+                Text("Play", fontSize = 20.sp)
             }
         }
     }

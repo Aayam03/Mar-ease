@@ -68,25 +68,19 @@ fun UserProfileIcon(showHints: Boolean, viewModel: GameViewModel, onShowHistory:
                     Text(text = user.displayName ?: "Guest", color = Color.White, fontWeight = FontWeight.Bold)
                     HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = Color.Gray)
                     
-                    if (showHints) {
-                        Text(text = "LEARN MODE", color = Color.Yellow, fontSize = 10.sp, fontWeight = FontWeight.ExtraBold)
-                        Text(text = "Games: ${stats.learnGames}", color = Color.White, fontSize = 14.sp)
-                        Text(text = "Total Points: ${stats.learnPoints}", color = Color.White, fontSize = 14.sp)
-                    } else {
-                        Text(text = "PLAY MODE", color = Color.Cyan, fontSize = 10.sp, fontWeight = FontWeight.ExtraBold)
-                        Spacer(modifier = Modifier.height(4.dp))
-                        
-                        Text(text = "Easy", color = Color.LightGray, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                        Text(text = "Games: ${stats.easyGames} | Points: ${stats.easyPoints}", color = Color.White, fontSize = 13.sp)
-                        
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(text = "Medium", color = Color.LightGray, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                        Text(text = "Games: ${stats.mediumGames} | Points: ${stats.mediumPoints}", color = Color.White, fontSize = 13.sp)
-                        
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(text = "Hard", color = Color.LightGray, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                        Text(text = "Games: ${stats.hardGames} | Points: ${stats.hardPoints}", color = Color.White, fontSize = 13.sp)
-                    }
+                    Text(text = "PLAY MODE", color = Color.Cyan, fontSize = 10.sp, fontWeight = FontWeight.ExtraBold)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    
+                    Text(text = "Easy", color = Color.LightGray, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    Text(text = "Games: ${stats.easyGames} | Points: ${stats.easyPoints}", color = Color.White, fontSize = 13.sp)
+                    
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(text = "Medium", color = Color.LightGray, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    Text(text = "Games: ${stats.mediumGames} | Points: ${stats.mediumPoints}", color = Color.White, fontSize = 13.sp)
+                    
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(text = "Hard", color = Color.LightGray, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    Text(text = "Games: ${stats.hardGames} | Points: ${stats.hardPoints}", color = Color.White, fontSize = 13.sp)
 
                     Button(
                         onClick = { 

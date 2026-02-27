@@ -23,18 +23,17 @@ fun CardGameApp() {
             PlayerSelectionScreen(
                 viewModel = viewModel,
                 onBack = { navController.popBackStack() }
-            ) { playerCount, difficulty, showHints ->
-                navController.navigate("game_board/$playerCount/$difficulty/$showHints") {
+            ) { playerCount, difficulty ->
+                navController.navigate("game_board/$playerCount/$difficulty") {
                     popUpTo("startup")
                 }
             }
         }
-        composable("game_board/{playerCount}/{difficulty}/{showHints}") { backStackEntry ->
+        composable("game_board/{playerCount}/{difficulty}") { backStackEntry ->
             val playerCount = backStackEntry.arguments?.getString("playerCount")?.toIntOrNull() ?: 4
             val difficultyStr = backStackEntry.arguments?.getString("difficulty") ?: "HARD"
             val difficulty = try { Difficulty.valueOf(difficultyStr) } catch (_: Exception) { Difficulty.HARD }
-            val showHints = backStackEntry.arguments?.getString("showHints")?.toBoolean() ?: false
-            GameBoardScreen(playerCount = playerCount, difficulty = difficulty, showHints = showHints, navController = navController, viewModel = viewModel)
+            GameBoardScreen(playerCount = playerCount, difficulty = difficulty, navController = navController, viewModel = viewModel)
         }
         composable("history") {
             GameHistoryScreen(viewModel = viewModel, onBack = { navController.popBackStack() })

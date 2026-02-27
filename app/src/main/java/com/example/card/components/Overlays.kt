@@ -121,6 +121,7 @@ fun PauseMenuOverlay(onResume: () -> Unit, onGoBack: () -> Unit, onLearnFromStar
             modifier = Modifier.padding(32.dp).width(300.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
         ) {
+            @Suppress("DEPRECATION")
             Column(modifier = Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Text("Paused", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(24.dp))
@@ -129,7 +130,7 @@ fun PauseMenuOverlay(onResume: () -> Unit, onGoBack: () -> Unit, onLearnFromStar
                 }
                 Spacer(modifier = Modifier.height(12.dp))
                 Button(onClick = onLearnFromStart, modifier = Modifier.fillMaxWidth()) {
-                    Text("Learn from Start")
+                    Text("Restart Game")
                 }
                 Spacer(modifier = Modifier.height(12.dp))
                 OutlinedButton(onClick = onGoBack, modifier = Modifier.fillMaxWidth()) {
@@ -155,6 +156,7 @@ fun BasicsOverlay(hasShown: Boolean, onDismiss: () -> Unit) {
         if (hasShown) {
             list.add {
                 Column {
+                    @Suppress("DEPRECATION")
                     Text("You've just performed a 'Show'!", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(
@@ -298,43 +300,6 @@ fun BasicsOverlay(hasShown: Boolean, onDismiss: () -> Unit) {
             }
         }
 
-        list.add {
-            Column {
-                Text("10. Card Highlights", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                Spacer(modifier = Modifier.height(16.dp))
-                Text("In Learn Mode, we use colors to guide you:", style = MaterialTheme.typography.bodyLarge)
-                Spacer(modifier = Modifier.height(12.dp))
-
-                val highlights = listOf(
-                    Triple(Color.Yellow, "Last Drawn", "The card you just picked up."),
-                    Triple(Color(0xFFFF69B4), "Selected", "Cards you've tapped to show/discard."),
-                    Triple(Color(0xFF4CAF50), "Melded", "Cards forming a valid sequence/set."),
-                    Triple(Color(0xFF9C27B0), "Dubli Pair", "Identical cards. This appears when you have 4+ pairs."),
-                    Triple(Color.Cyan, "Maal Joker", "New Jokers after Maal revelation."),
-                    Triple(Color.Red, "Hint / Warning", "Suggested cards or alerts.")
-                )
-
-                highlights.forEach { (color, label, desc) ->
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(vertical = 6.dp).fillMaxWidth()
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(28.dp)
-                                .background(Color.White, RoundedCornerShape(4.dp))
-                                .border(BorderStroke(2.dp, color), RoundedCornerShape(4.dp))
-                        )
-                        Spacer(modifier = Modifier.width(16.dp))
-                        Column {
-                            Text(label, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = color)
-                            Text(desc, style = MaterialTheme.typography.bodyMedium)
-                        }
-                    }
-                }
-            }
-        }
-        
         list
     }
 
@@ -363,6 +328,7 @@ fun BasicsOverlay(hasShown: Boolean, onDismiss: () -> Unit) {
                     Text("END TUTORIAL", fontSize = 18.sp, fontWeight = FontWeight.ExtraBold, color = Color.Red)
                 }
 
+                @Suppress("DEPRECATION")
                 Column(modifier = Modifier.padding(24.dp).fillMaxSize(), verticalArrangement = Arrangement.SpaceBetween) {
                     Box(modifier = Modifier.weight(1f).padding(top = 24.dp).verticalScroll(scrollState)) {
                         pages[currentPage]()
@@ -420,6 +386,7 @@ fun DubliStrategyOverlay(onDismiss: () -> Unit) {
                     Text("CLOSE", fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, color = Color.Red)
                 }
 
+                @Suppress("DEPRECATION")
                 Column(modifier = Modifier.padding(24.dp).fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                     Text("New Strategy: Aim for Dubli!", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, textAlign = TextAlign.Center)
                     Spacer(modifier = Modifier.height(16.dp))
@@ -454,6 +421,7 @@ fun SelectionDialog(
             shape = RoundedCornerShape(16.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
         ) {
+            @Suppress("DEPRECATION")
             Column(modifier = Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Text("Select a card to Discard", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(16.dp))
@@ -510,6 +478,7 @@ fun GameEndOverlay(gameState: GameState, navController: NavController) {
             modifier = Modifier.padding(8.dp).fillMaxWidth(0.95f).fillMaxHeight(0.95f),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
         ) {
+            @Suppress("DEPRECATION")
             Column(modifier = Modifier.padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Text("Game Results", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(8.dp))
