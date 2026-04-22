@@ -176,7 +176,10 @@ class GameViewModel : ViewModel() {
         }
     }
 
-    fun initGame(playerCount: Int, showHints: Boolean = false, difficulty: Difficulty = Difficulty.MEDIUM) {
+    private var pendingPlayerCount: Int? = null
+    private var pendingDifficulty: Difficulty? = null
+
+    fun initGame(playerCount: Int, showHints: Boolean, difficulty: Difficulty = Difficulty.MEDIUM) {
         if (gameState == null) {
             val newState = GameState(viewModelScope, showHints)
             gameState = newState
@@ -189,7 +192,8 @@ class GameViewModel : ViewModel() {
             if (showHints) {
                 showHelp = true
                 hasClosedHelpOnce = false
-                // No need to store pending values if showHints is always false, but keeping signature for now
+                pendingPlayerCount = playerCount
+                pendingDifficulty = difficulty
             } else {
                 newState.setupGame(playerCount, difficulty)
                 showHelp = false
@@ -202,6 +206,11 @@ class GameViewModel : ViewModel() {
         showHelp = show
         if (!show) {
             hasClosedHelpOnce = true
+            pendingPlayerCount?.let { count ->
+                gameState?.setupGame(count, pendingDifficulty ?: Difficulty.MEDIUM)
+                pendingPlayerCount = null
+                pendingDifficulty = null
+            }
         }
     }
 

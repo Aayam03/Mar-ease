@@ -76,7 +76,10 @@ object GameEngine {
         }
     }
 
-
+    /**
+     * Calculates the detailed breakdown of Maal points for a player.
+     * Includes Marriage sets, standard Maal points, and starting bonuses (Tunnelas, etc.).
+     */
     fun getDetailedMaalBreakdown(
         player: Int, 
         playerHands: Map<Int, List<Card>>, 
